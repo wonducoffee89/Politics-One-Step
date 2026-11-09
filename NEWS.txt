@@ -1,0 +1,18 @@
+# 정치 한 걸음 NEWS.txt
+# 형식: 국내|언론사|RSS주소 또는 국제|언론사|RSS주소
+# 아래 등록된 RSS만 앱에서 사용합니다.
+# 새 피드를 추가할 때는 같은 형식을 사용해 한 줄을 추가하세요.
+
+국내|KBS 세계|http://world.kbs.co.kr/rss/rss_news.htm?lang=k
+국내|KBS 뉴스|https://news.kbs.co.kr/rss/news.xml
+국내|연합뉴스 정치|https://www.yna.co.kr/rss/politics.xml
+국제|연합뉴스 국제|https://www.yna.co.kr/rss/international.xml
+국내|연합뉴스 종합|https://www.yna.co.kr/rss/news.xml
+국제|BBC World|http://feeds.bbci.co.uk/news/world/rss.xml
+국제|BBC Politics|http://feeds.bbci.co.uk/news/politics/rss.xml
+국제|CNN World|http://rss.cnn.com/rss/edition_world.rss
+국제|CNN Politics|http://rss.cnn.com/rss/cnn_allpolitics.rss
+국제|Reuters World|https://www.reuters.com/arc/outboundfeeds/rss/world/
+국제|AP|https://feedx.net/rss/ap.xml
+국제|AFP|https://www.afp.com/en/actus/afp_communique/all/feed
+국제|France24·AFP|https://www.france24.com/en/rss
