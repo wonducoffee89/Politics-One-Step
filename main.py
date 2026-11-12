@@ -11,35 +11,50 @@ Streamlit 메인 앱
 
 Streamlit Community Cloud > App settings > Secrets
 [API_KEYS]
-OPENASSEMBLY_KEY = "열린국회정보 인증키"
-DATA_GO_KR_KEY = "공공데이터포털 일반 인증키(Decoding 키 권장)"
-KOSIS_KEY = "KOSIS 인증키"
-VWORLD_KEY = "브이월드 인증키"
+ASSEMBLY_MEMBER_KEY = "국회의원 정보 통합 API 전용 인증키"
+ASSEMBLY_VOTE_KEY = "국회의원 본회의 표결정보 전용 인증키"
+ASSEMBLY_SCHEDULE_KEY = "국회일정 통합 API 전용 인증키"
+NEC_WINNER_KEY = "중앙선거관리위원회 당선인 정보 전용 인증키"
+NEC_CANDIDATE_KEY = "중앙선거관리위원회 후보자 통합검색 전용 인증키"
+MOIS_BENEFIT_KEY = "행정안전부 공공서비스 정보 전용 인증키"
+MOIS_STAFF_KEY = "행정안전부 기관별 공무원 정원 전용 인증키"
+MOIS_SUBORG_KEY = "행정안전부 중앙행정기관 하부기구 전용 인증키"
+MOIS_COUNCIL_KEY = "행정안전부 지방의회의원 정수 전용 인증키"
+MOIS_POPULATION_KEY = "행정안전부 행정동별 주민등록 인구 전용 인증키"
+KOSIS_KEY = "KOSIS 공유서비스 전용 인증키"
+VWORLD_KEY = "VWorld 행정구역도 전용 인증키"
 
 [APP]
 VWORLD_DOMAIN = "https://실제-배포된-앱-주소"
 
-선택 설정(정확한 상세 요청 주소를 알게 된 API부터 추가)
+선택 설정(실제 활용가이드에서 확인한 값만 입력)
 [API_URLS]
 ASSEMBLY_SCHEDULE = "국회일정 통합 API 상세 요청 주소"
-MOIS_BENEFIT = "공공서비스 API 상세 요청 주소"
 MOIS_COUNCIL_SEATS = "지방의회의원 정수 API 상세 요청 주소"
 MOIS_POPULATION = "행정동 인구 API 상세 요청 주소"
 
 [API_CODES]
 ASSEMBLY_SCHEDULE = "국회일정 통합 API 코드"
+CANDIDATE_NAME_PARAM = "후보자 이름 검색변수"
+MOIS_POPULATION_MONTH_PARAM = "통계년월 요청변수"
+MOIS_POPULATION_ADMIN_PARAM = "행정기관코드 요청변수"
 
-주의:
-- 인증키는 코드에 넣지 않습니다.
-- 알려지지 않은 상세 요청 주소나 필수 검색 변수를 임의로 만들어 호출하지 않습니다.
+중요:
+- 총 12개 API는 각각 별도의 인증키를 사용합니다. 인증키를 합치거나 공통 키로 대체하지 않습니다.
+- 각 키는 API_KEYS 안의 해당 서비스 전용 이름에 개별 등록합니다.
+- 인증키는 이 코드나 GitHub 저장소에 넣지 않습니다.
+- 확인되지 않은 상세 요청 주소·요청변수는 임의로 만들어 호출하지 않습니다.
+- 정부디렉터리시스템 표준 API는 신청 대기 중이므로 현재 12개 목록에 포함하지 않습니다.
 - API 응답 실패는 해당 자료 영역에만 표시하고 앱 전체는 계속 작동합니다.
 """
 
 from __future__ import annotations
 
 import calendar
+import hashlib
 import html
 import json
+import math
 import random
 import re
 import xml.etree.ElementTree as ET
@@ -108,16 +123,27 @@ st.markdown(
     .section-title {font-size:1.12rem; font-weight:800; margin:.3rem 0 .65rem;}
     .muted {color:var(--secondary-text-color); font-size:.86rem;}
     .quiz-panel {border:1px solid var(--border-color, #dedede); border-radius:16px; padding:1rem 1.05rem; background:var(--secondary-background-color);}
-    .api-card {border:1px solid var(--border-color, #dedede); border-radius:14px; padding:.9rem; min-height:130px; background:var(--secondary-background-color);}
+    .api-card {border:1px solid var(--border-color, #dedede); border-radius:14px; padding:.9rem; min-height:176px; background:var(--secondary-background-color);}
     .api-card-title {font-weight:800; font-size:1rem; margin:.25rem 0;}
     .api-card-desc {color:var(--secondary-text-color); font-size:.84rem; line-height:1.5;}
     .news-card {border:1px solid var(--border-color, #dedede); border-radius:12px; padding:.72rem .85rem; margin:.4rem 0; background:var(--secondary-background-color);}
     .news-title {font-weight:700; line-height:1.5; margin:.2rem 0;}
     .news-meta {font-size:.78rem; color:var(--secondary-text-color); margin-bottom:.35rem;}
     .news-summary {font-size:.88rem; line-height:1.55;}
-    .org-node {border:1px solid var(--border-color, #dedede); border-radius:12px; padding:.9rem; text-align:center; background:var(--secondary-background-color); margin:.25rem 0;}
+    .org-node {border:1px solid var(--border-color, #dedede); border-radius:12px; padding:.9rem; text-align:center; background:var(--secondary-background-color); margin:.25rem 0; min-height:76px;}
+    .org-node-hover {cursor:help; transition:border-color .15s ease, box-shadow .15s ease;}
+    .org-node-hover:hover {border-color:var(--primary-color); box-shadow:0 2px 10px rgba(0,0,0,.08);}
+    .org-node-title {font-weight:750; font-size:1rem; color:var(--text-color);}
+    .org-node-role {font-size:.88rem; color:var(--secondary-text-color); margin-top:.3rem; line-height:1.45;}
+    .org-node-icon {display:block; font-size:1.2rem; margin-bottom:.2rem;}
     .org-node strong {font-size:1rem;}
     .org-node small {color:var(--secondary-text-color);}
+    div[data-testid="stButton"] > button {white-space:pre-wrap; line-height:1.45;}
+    .region-metric {border:1px solid var(--border-color, #dedede);border-radius:12px;padding:.8rem .9rem;min-height:112px;background:var(--secondary-background-color);}
+    .region-metric .metric-name {font-size:.88rem;color:var(--secondary-text-color);margin-bottom:.35rem;}
+    .region-metric .metric-value {font-size:1.18rem;font-weight:800;line-height:1.35;overflow-wrap:anywhere;}
+    .region-metric .metric-meta {font-size:.75rem;color:var(--secondary-text-color);margin-top:.35rem;}
+    .org-arrow {text-align:center;color:var(--secondary-text-color);font-size:1.1rem;padding:.25rem 0;}
     div[data-testid="stVerticalBlock"] {gap:.55rem;}
     div[data-testid="stMetric"] {border:1px solid var(--border-color, #dedede); border-radius:12px; padding:.7rem;}
     div[data-testid="stSidebar"] {min-width:250px;}
@@ -153,13 +179,40 @@ def _is_placeholder(value: str) -> bool:
     text = str(value or "").strip().lower()
     if not text:
         return True
-    markers = ("인증키", "실제-배포", "실제 도메인", "상세 요청 주소", "api 코드", "<", ">", "placeholder")
+    markers = ("인증키", "전용키", "여기에_", "실제-배포", "실제 도메인", "상세 요청 주소", "api 코드", "<", ">", "placeholder")
     return any(marker in text for marker in markers)
 
 
-def api_key(key_name: str) -> str:
+def api_key_status(key_name: str) -> str:
+    """API 키 값을 노출하지 않고 미등록·중복·등록됨 상태만 반환합니다."""
     value = get_secret("API_KEYS", key_name)
-    return "" if _is_placeholder(value) else value
+    if _is_placeholder(value):
+        return "미등록"
+    known_names = globals().get("API_KEY_NAMES", {})
+    duplicate_names = [
+        other_name for other_name in known_names.values()
+        if other_name != key_name and get_secret("API_KEYS", other_name) == value
+    ]
+    return "중복" if duplicate_names else "등록됨"
+
+
+def api_key(key_name: str) -> str:
+    """전용 키가 정상 등록된 경우에만 반환하며 중복 키는 사용하지 않습니다."""
+    if api_key_status(key_name) != "등록됨":
+        return ""
+    return get_secret("API_KEYS", key_name)
+
+
+def api_key_error_message(key_name: str) -> str:
+    status = api_key_status(key_name)
+    if status == "중복":
+        return f"Streamlit Secrets의 API_KEYS.{key_name} 값이 다른 API의 인증키와 중복됩니다. 12개 API에 각각 발급된 키를 따로 입력해 주세요."
+    return f"Streamlit Secrets의 API_KEYS.{key_name}에 해당 API 전용 인증키를 등록해 주세요."
+
+
+def api_key_is_configured(key_name: str) -> bool:
+    """중복되지 않은 전용 키가 등록되어 있는지만 반환합니다."""
+    return api_key_status(key_name) == "등록됨"
 
 
 def api_url(url_name: str, default: str = "") -> str:
@@ -810,33 +863,33 @@ def collect_news(region: str):
 
 API_GROUPS = [
     {
-        "id": "assembly", "name": "국회", "icon": "🏛️",
+        "id": "assembly", "name": "입법부 · 국회", "icon": "🏛️",
         "description": "국회의원·본회의 표결·국회 일정",
         "items": ["member", "vote", "schedule"],
     },
     {
-        "id": "election", "name": "선거", "icon": "🗳️",
+        "id": "election", "name": "선거 · 중앙선거관리위원회", "icon": "🗳️",
         "description": "당선인·후보자·선거구 정보",
         "items": ["winner", "candidate"],
     },
     {
-        "id": "government", "name": "행정부", "icon": "🏢",
+        "id": "government", "name": "행정부 · 행정안전부", "icon": "🏢",
         "description": "공공서비스·기관별 공무원·중앙행정기관 하부기구",
         "items": ["benefit", "staff", "suborg"],
     },
     {
-        "id": "local", "name": "지방행정", "icon": "🗺️",
+        "id": "local", "name": "지방행정 · 행정안전부", "icon": "🗺️",
         "description": "지방의회 정수·주민등록 인구",
         "items": ["council", "population"],
     },
     {
-        "id": "statistics", "name": "국가통계", "icon": "📊",
+        "id": "statistics", "name": "국가통계 · 국가데이터처", "icon": "📊",
         "description": "KOSIS 지역·사회 지표 통계",
         "items": ["kosis"],
     },
     {
-        "id": "map", "name": "행정구역 지도", "icon": "📍",
-        "description": "브이월드 WMS/WFS 행정구역 경계",
+        "id": "map", "name": "공간정보 · 국토교통부", "icon": "📍",
+        "description": "브이월드 WMTS 배경지도·WFS 행정구역 경계",
         "items": ["vworld"],
     },
 ]
@@ -845,7 +898,7 @@ API_ITEMS = {
     "member": {
         "title": "국회의원 정보 통합 API", "short": "국회의원",
         "description": "국회의원 이름·정당·지역구 등 기본 정보를 조회합니다.",
-        "group": "국회", "key": "OPENASSEMBLY_KEY",
+        "group": "국회", "key": "ASSEMBLY_MEMBER_KEY",
         "url": "https://open.assembly.go.kr/portal/openapi/ALLNAMEMBER",
         "status": "요청 주소 확인",
         "source_url": "https://open.assembly.go.kr/",
@@ -853,7 +906,7 @@ API_ITEMS = {
     "vote": {
         "title": "국회의원 본회의 표결정보", "short": "본회의 표결",
         "description": "국회의원의 본회의 안건별 찬성·반대·기권 등 표결 자료입니다.",
-        "group": "국회", "key": "OPENASSEMBLY_KEY",
+        "group": "국회", "key": "ASSEMBLY_VOTE_KEY",
         "url": "https://open.assembly.go.kr/portal/openapi/nojepdqqaweusdfbi",
         "status": "국회 대수·의안 ID 입력 필요",
         "source_url": "https://open.assembly.go.kr/",
@@ -861,14 +914,15 @@ API_ITEMS = {
     "schedule": {
         "title": "국회일정 통합 API", "short": "국회일정",
         "description": "본회의·위원회 일정과 의정활동 일정을 조회합니다.",
-        "group": "국회", "key": "OPENASSEMBLY_KEY",
+        "group": "국회", "key": "ASSEMBLY_SCHEDULE_KEY",
         "url": "",
         "status": "상세 API 코드 확인 필요",
+        "source_url": "https://open.assembly.go.kr/",
     },
     "winner": {
         "title": "중앙선거관리위원회 당선인 정보", "short": "당선인",
         "description": "선거 ID와 선거 종류, 시도·선거구를 지정해 당선인 정보를 조회합니다.",
-        "group": "선거", "key": "DATA_GO_KR_KEY",
+        "group": "선거", "key": "NEC_WINNER_KEY",
         "url": "https://apis.data.go.kr/9760000/WinnerInfoInqireService2/getWinnerInfoInqire",
         "status": "요청 주소 확인",
         "source_url": "https://www.data.go.kr/data/15000864/openapi.do",
@@ -876,7 +930,7 @@ API_ITEMS = {
     "candidate": {
         "title": "중앙선거관리위원회 후보자 통합검색", "short": "후보자",
         "description": "후보자 이름을 기준으로 후보 이력과 기본 정보를 검색합니다.",
-        "group": "선거", "key": "DATA_GO_KR_KEY",
+        "group": "선거", "key": "NEC_CANDIDATE_KEY",
         "url": "https://apis.data.go.kr/9760000/CndaSrchService/getCndaSrchInqire",
         "status": "이름 검색 요청변수 확인 필요",
         "source_url": "https://www.data.go.kr/data/15140045/openapi.do",
@@ -884,7 +938,7 @@ API_ITEMS = {
     "benefit": {
         "title": "행정안전부 공공서비스(혜택) 정보", "short": "공공서비스",
         "description": "중앙부처·지자체 등이 제공하는 공공서비스 목록과 상세 정보입니다.",
-        "group": "행정부", "key": "DATA_GO_KR_KEY",
+        "group": "행정부", "key": "MOIS_BENEFIT_KEY",
         "url": "https://api.odcloud.kr/api/gov24/v3/serviceList",
         "status": "정부24 공공서비스 목록 API 연결",
         "source_url": "https://www.data.go.kr/data/15113968/openapi.do",
@@ -892,7 +946,7 @@ API_ITEMS = {
     "staff": {
         "title": "행정안전부 기관별 공무원 정원", "short": "공무원 정원",
         "description": "기준연도와 기관별 공무원 정원 통계를 확인합니다.",
-        "group": "행정부", "key": "DATA_GO_KR_KEY",
+        "group": "행정부", "key": "MOIS_STAFF_KEY",
         "url": "https://apis.data.go.kr/1741000/FixedNumberCivilServantsOrg/getFixedNumberCivilServantsOrgList",
         "status": "요청 주소 확인",
         "source_url": "https://www.data.go.kr/data/15077900/openapi.do",
@@ -900,7 +954,7 @@ API_ITEMS = {
     "suborg": {
         "title": "행정안전부 중앙행정기관별 하부기구", "short": "중앙기관 하부기구",
         "description": "중앙행정기관의 보조·보좌기관 관련 통계를 확인합니다.",
-        "group": "행정부", "key": "DATA_GO_KR_KEY",
+        "group": "행정부", "key": "MOIS_SUBORG_KEY",
         "url": "https://apis.data.go.kr/1741000/SubOrganEachCenterExecutive/getSubOrganEachCenterExecutive",
         "status": "요청 주소 확인",
         "source_url": "https://www.data.go.kr/data/15107327/openapi.do",
@@ -908,7 +962,7 @@ API_ITEMS = {
     "council": {
         "title": "행정안전부 기수별 지방의회의원 정수", "short": "지방의회 정수",
         "description": "지방의회의 기수별·유형별 의원 정수 통계입니다. 퀴즈가 아닌 지역 정보에 사용합니다.",
-        "group": "지방행정", "key": "DATA_GO_KR_KEY",
+        "group": "지방행정", "key": "MOIS_COUNCIL_KEY",
         "url": "",
         "status": "상세 요청 주소 확인 필요",
         "source_url": "https://www.data.go.kr/data/15107372/openapi.do",
@@ -916,7 +970,7 @@ API_ITEMS = {
     "population": {
         "title": "행정안전부 행정동별 주민등록 인구 및 세대현황", "short": "주민등록 인구",
         "description": "행정구역·통계년월별 인구와 세대 현황을 확인합니다.",
-        "group": "지방행정", "key": "DATA_GO_KR_KEY",
+        "group": "지방행정", "key": "MOIS_POPULATION_KEY",
         "url": "",
         "status": "상세 요청 주소 확인 필요",
         "source_url": "https://www.data.go.kr/data/15108065/openapi.do",
@@ -931,20 +985,40 @@ API_ITEMS = {
     },
     "vworld": {
         "title": "국토교통부 행정구역도 WMS/WFS", "short": "행정구역도",
-        "description": "광역시도·시군구·읍면동의 경계 공간정보를 지도에 표시합니다.",
+        "description": "브이월드 WMTS 배경지도 위에 광역시도·시군구·읍면동 WFS 경계를 표시합니다.",
         "group": "지도", "key": "VWORLD_KEY",
         "url": "https://api.vworld.kr/req/wfs",
-        "status": "WFS 레이어 연결",
+        "status": "WMTS 배경지도·WFS 경계 사용 (WMS 별도 미적용)",
         "source_url": "https://www.vworld.kr/",
     },
 }
 
+API_KEY_NAMES = {item_id: item["key"] for item_id, item in API_ITEMS.items()}
+
+
+def validate_api_key_configuration():
+    """12개 API가 서로 다른 Secrets 키 이름을 사용하는지 확인합니다."""
+    expected_items = {
+        "member", "vote", "schedule", "winner", "candidate", "benefit",
+        "staff", "suborg", "council", "population", "kosis", "vworld",
+    }
+    if set(API_ITEMS) != expected_items:
+        raise RuntimeError("API_ITEMS의 12개 서비스 구성이 예상 목록과 다릅니다.")
+    keys = [item.get("key", "") for item in API_ITEMS.values()]
+    if len(keys) != 12 or len(set(keys)) != 12 or any(not key for key in keys):
+        raise RuntimeError("각 API에는 서로 다른 전용 Secrets 키 이름이 하나씩 지정되어야 합니다.")
+    return True
+
+
+validate_api_key_configuration()
+
 
 def open_assembly_call(item_id: str, extra=None):
-    key = api_key("OPENASSEMBLY_KEY")
-    if not key:
-        return [], "Streamlit Secrets에 OPENASSEMBLY_KEY를 등록해 주세요."
     item = API_ITEMS[item_id]
+    key_name = item["key"]
+    key = api_key(key_name)
+    if not key:
+        return [], api_key_error_message(key_name)
     url = item["url"]
     if item_id == "schedule":
         url = api_url("ASSEMBLY_SCHEDULE")
@@ -964,14 +1038,15 @@ def open_assembly_call(item_id: str, extra=None):
 
 
 def data_go_call(item_id: str, extra=None):
-    """공공데이터포털 API 어댑터. 확인되지 않은 파라미터 이름은 임의로 전송하지 않습니다."""
-    key = api_key("DATA_GO_KR_KEY")
-    if not key:
-        return [], "Streamlit Secrets에 DATA_GO_KR_KEY를 등록해 주세요."
+    """공공데이터포털 API 어댑터. 서비스별 독립 키를 사용하며, 확인되지 않은 변수는 보내지 않습니다."""
     if item_id not in API_ITEMS:
         return [], "등록되지 않은 공공데이터 항목입니다."
 
     item = API_ITEMS[item_id]
+    key_name = item["key"]
+    key = api_key(key_name)
+    if not key:
+        return [], api_key_error_message(key_name)
     url = item["url"]
     params = {
         "serviceKey": key,
@@ -1040,14 +1115,14 @@ def data_go_call(item_id: str, extra=None):
 def kosis_list_call(parent_id: str, view_code: str):
     key = api_key("KOSIS_KEY")
     if not key:
-        return [], "Streamlit Secrets에 KOSIS_KEY를 등록해 주세요."
+        return [], api_key_error_message("KOSIS_KEY")
     if not parent_id.strip():
-        return [], "KOSIS 통계목록을 조회하려면 목록 시작 ID(parentListId)가 필요합니다."
+        return [], "KOSIS 통계목록을 조회하려면 목록 시작 ID(parentId)가 필요합니다."
     params = {
         "method": "getList",
         "apiKey": key,
         "vwCd": view_code,
-        "parentListId": parent_id.strip(),
+        "parentId": parent_id.strip(),
         "format": "json",
         "jsonVD": "Y",
     }
@@ -1080,7 +1155,7 @@ def validate_kosis_period_range(period: str, start_period: str, end_period: str)
 def kosis_data_call(org_id: str, table_id: str, item_id: str, obj_l1: str, period: str, start_period: str = "", end_period: str = ""):
     key = api_key("KOSIS_KEY")
     if not key:
-        return [], "Streamlit Secrets에 KOSIS_KEY를 등록해 주세요."
+        return [], api_key_error_message("KOSIS_KEY")
     required = [org_id, table_id, item_id, obj_l1, period]
     if not all(str(x).strip() for x in required):
         return [], "기관 ID·통계표 ID·항목 ID·분류값·수록주기를 입력해야 합니다."
@@ -1164,6 +1239,9 @@ def initialize_state():
         "quiz_title": "",
         "quiz_return_page": "정치 퀴즈·미니게임",
         "home_daily_result": None,
+        "news_focus": "",
+        "live_candidate_pool": [],
+        "local_region_data_cache": {},
         "api_selected_group": "assembly",
         "api_selected_item": "",
         "quiz_mode": "today",
@@ -1176,6 +1254,18 @@ def initialize_state():
         "local_selected_sigungu": "",
         "local_selected_sigungu_code": "",
         "local_population_admin_code": "",
+        "local_stage": "sido",
+        "local_sido_feature": None,
+        "local_sigungu_feature": None,
+        "local_sido_attempted": False,
+        "local_sigungu_attempted": False,
+        "local_population_rows": [],
+        "local_population_error": "",
+        "local_council_rows": [],
+        "local_council_error": "",
+        "local_kosis_rows": [],
+        "local_kosis_error": "",
+        "local_kosis_region_name": "",
     }
     for key, value in initial.items():
         if key not in st.session_state:
@@ -1224,6 +1314,9 @@ def show_quiz_result_dialog():
             st.markdown(f"**{number}. {html.escape(str(item['문제']))}**")
             st.write(f"내 답: {item['선택답']} / 정답: {item['정답']}")
             st.caption(item.get("해설", ""))
+            source = item.get("출처", "")
+            if source and is_safe_http_url(source):
+                st.link_button("문제의 공식 자료 출처", source, key=f"quiz_result_source_{number}")
 
     if st.button("나가기", type="primary", use_container_width=True):
         st.session_state.quiz_active = False
@@ -1326,6 +1419,47 @@ def render_live_quiz_tools():
                 begin_quiz([quiz], "당선인 인물 퀴즈", st.session_state.get("quiz_return_page", "홈"))
                 st.rerun()
 
+        st.divider()
+        st.markdown("**후보자 경력 자료로 퀴즈 만들기**")
+        st.caption("중앙선거관리위원회 후보자 통합검색은 이름을 기준으로 후보자의 경력·학력·정당·선거·당선 여부 등을 제공합니다. 여러 인물을 검색해 경력 자료를 모으면 비교형 퀴즈를 만들 수 있습니다.")
+        candidate_name = st.text_input("후보자 이름 검색", placeholder="예: 이재명", key="live_candidate_name")
+        if st.button("후보자 경력 검색 및 자료 모으기", key="live_candidate_fetch", disabled=not candidate_name.strip()):
+            rows, message = data_go_call("candidate", {"name": candidate_name.strip()})
+            st.session_state.live_candidate_error = message
+            if rows:
+                existing = st.session_state.get("live_candidate_pool", [])
+                combined = existing + rows
+                deduplicated = {}
+                for row in combined:
+                    try:
+                        key = json.dumps(row, ensure_ascii=False, sort_keys=True, default=str)
+                    except TypeError:
+                        key = repr(row)
+                    deduplicated.setdefault(key, row)
+                st.session_state.live_candidate_pool = list(deduplicated.values())
+                st.session_state.live_candidate_error = ""
+        if st.session_state.get("live_candidate_error"):
+            st.warning(st.session_state.live_candidate_error)
+        candidate_pool = st.session_state.get("live_candidate_pool", [])
+        if candidate_pool:
+            normalized_candidates = [normalize_candidate_record(row) for row in candidate_pool]
+            preview = [{
+                "이름": item["이름"], "정당": item["정당"], "선거": item["선거"],
+                "선거구": item["선거구"], "확인된 경력": " / ".join(item["경력"]) or "응답에 경력 필드 없음",
+            } for item in normalized_candidates]
+            st.caption(f"누적 검색 자료 {len(candidate_pool)}건 · 이름이 다른 인물 {len({x['이름'] for x in normalized_candidates if x['이름'] != '정보 없음'})}명")
+            st.dataframe(pd.DataFrame(preview), use_container_width=True, hide_index=True, height=220)
+            career_quiz = generate_candidate_career_quiz(candidate_pool)
+            if career_quiz:
+                if st.button("후보자 경력 퀴즈 시작", key="live_candidate_quiz_start", type="primary"):
+                    begin_quiz([career_quiz], "실시간 정치인 경력 퀴즈", st.session_state.get("quiz_return_page", "홈"))
+                    st.rerun()
+            else:
+                st.info("서로 다른 인물 2명 이상과, 비교할 수 있는 경력 자료가 충분히 모이면 경력 퀴즈를 만들 수 있습니다. 현재 응답에 경력 필드가 있는지도 확인해 주세요.")
+            if st.button("누적 후보자 자료 비우기", key="live_candidate_clear"):
+                st.session_state.live_candidate_pool = []
+                st.rerun()
+
 
 def render_quiz_session(quiz_questions):
     questions = st.session_state.quiz_questions
@@ -1347,8 +1481,9 @@ def render_quiz_session(quiz_questions):
 
     left, right = st.columns([5, 1])
     with left:
-        st.markdown("### 정치 퀴즈")
-        st.caption(f"오늘의 퀴즈 · {current + 1} / {len(questions)}")
+        quiz_title = st.session_state.get("quiz_title") or "정치 퀴즈"
+        st.markdown(f"### {html.escape(str(quiz_title))}")
+        st.caption(f"{html.escape(str(quiz_title))} · {current + 1} / {len(questions)}")
     with right:
         if st.button("↪ 퀴즈 종료", key="quiz_exit", use_container_width=True):
             st.session_state.quiz_result_open = True
@@ -1378,6 +1513,7 @@ def render_quiz_session(quiz_questions):
                 "정답여부": is_correct,
                 "해설": question.get("해설", ""),
                 "분야": question.get("분야", "실시간 정치자료"),
+                "출처": question.get("출처", ""),
             })
             st.session_state.quiz_current += 1
             if st.session_state.quiz_current >= len(questions):
@@ -1402,19 +1538,23 @@ def normalize_member_record(row):
 
 
 def generate_member_quiz(member_rows, desired_district=""):
+    """국회 API에 실제로 포함된 현역 의원 정보로 지역구 문제를 만듭니다."""
     members = [normalize_member_record(row) for row in member_rows]
-    members = [m for m in members if m["이름"] != "정보 없음"]
-    if desired_district.strip():
-        district_matches = [m for m in members if desired_district.strip() in m["지역구"]]
-    else:
-        district_matches = members
+    # 동일 의원이 여러 응답 행에 중복된 경우 선택지에서 중복되지 않도록 합니다.
+    unique = {}
+    for member in members:
+        if member["이름"] != "정보 없음":
+            unique.setdefault(member["이름"], member)
+    members = list(unique.values())
+    query = str(desired_district or "").strip()
+    district_matches = [m for m in members if query.casefold() in m["지역구"].casefold()] if query else members
     if not district_matches or len(members) < 4:
         return None
     correct = random.choice(district_matches)
     distractors = [m["이름"] for m in members if m["이름"] != correct["이름"]]
-    if len(set(distractors)) < 3:
+    if len(distractors) < 3:
         return None
-    options = random.sample(list(dict.fromkeys(distractors)), 3) + [correct["이름"]]
+    options = random.sample(distractors, 3) + [correct["이름"]]
     random.shuffle(options)
     region_phrase = f"'{correct['지역구']}' 지역구" if correct["지역구"] != "정보 없음" else "자료에 표시된"
     return {
@@ -1424,6 +1564,7 @@ def generate_member_quiz(member_rows, desired_district=""):
         "정답": options.index(correct["이름"]) + 1,
         "해설": f"국회 API 응답에서 {correct['이름']} 의원의 지역구는 {correct['지역구']}, 정당은 {correct['정당']}으로 표시됩니다. 기준 시점과 원자료를 함께 확인하세요.",
         "난이도": "실시간 자료",
+        "출처": "https://open.assembly.go.kr/",
     }
 
 
@@ -1452,6 +1593,97 @@ def generate_winner_quiz(winner_rows):
         "정답": choices.index(target["name"]) + 1,
         "해설": f"당선인 API 자료에서 {target['name']}은(는) {target['district']} 선거구, 정당 {target['party']}로 조회되었습니다.",
         "난이도": "실시간 자료",
+        "출처": "https://www.data.go.kr/data/15000864/openapi.do",
+    }
+
+
+def normalize_candidate_record(row):
+    """후보자 API의 실제 응답 필드 중 이름·선거·정당·경력만 정리합니다.
+
+    API 제공기관이 필드명을 바꾸거나 복수 경력 필드를 보내는 경우를 고려해
+    이름은 알려진 별칭을 우선 사용하고, 경력은 career/경력 키만 모읍니다.
+    """
+    if not isinstance(row, dict):
+        return {"이름": "정보 없음", "정당": "정보 없음", "선거": "정보 없음", "선거구": "정보 없음", "경력": []}
+
+    name = first_field(row, ["CNDDA_NM", "CAND_NM", "CANDIDATE_NM", "candidateName", "candidateNm", "name", "NAME", "성명", "후보자명", "후보자성명"])
+    party = first_field(row, ["JD_NAME", "JD_NM", "jdName", "partyName", "POLY_NM", "정당명", "정당"])
+    election = first_field(row, ["SG_NAME", "SG_NM", "electionName", "선거명", "선거"])
+    district = first_field(row, ["SGG_NAME", "SGG_NM", "sggName", "선거구명", "선거구"])
+    election_id = first_field(row, ["SG_ID", "SGID", "sgId", "선거ID", "선거 아이디"])
+    election_type = first_field(row, ["SG_TYPECODE", "SG_TYPE_CODE", "sgTypecode", "선거종류코드"])
+
+    careers = []
+    for key, value in row.items():
+        key_text = str(key).strip().lower()
+        normalized = re.sub(r"[^0-9a-z가-힣]", "", key_text)
+        if "career" not in normalized and "경력" not in normalized:
+            continue
+        candidate_value = safe_string(value, "")
+        if candidate_value and candidate_value != "정보 없음":
+            # 하나의 응답 필드 안에 줄바꿈/세미콜론으로 여러 이력이 들어온 경우만 분리합니다.
+            for part in re.split(r"[\r\n;；]+", candidate_value):
+                part = re.sub(r"\s+", " ", part).strip(" ·,|-")
+                if part and part not in careers:
+                    careers.append(part)
+
+    return {
+        "이름": name, "정당": party, "선거": election, "선거 ID": election_id,
+        "선거종류": election_type, "선거구": district, "경력": careers, "raw": row,
+    }
+
+
+def generate_candidate_career_quiz(candidate_rows):
+    """후보자 API가 반환한 경력 사실만으로 인물 경력 객관식 문제를 만듭니다.
+
+    보기의 오답은 다른 후보자 응답에 실제로 기록된 경력에서 가져옵니다.
+    서로 다른 인물의 경력 자료가 충분하지 않으면 문제를 만들지 않습니다.
+    """
+    normalized = [normalize_candidate_record(row) for row in candidate_rows if isinstance(row, dict)]
+    people = {}
+    for person in normalized:
+        if person["이름"] == "정보 없음" or not person["경력"]:
+            continue
+        # 같은 이름의 후보자가 여러 선거·선거구에 등장할 수 있으므로 이름만으로 합치지 않습니다.
+        identity = (
+            person["이름"], person["선거 ID"], person["선거종류"],
+            person["선거"], person["선거구"], person["정당"],
+        )
+        people.setdefault(identity, {**person, "경력": []})
+        for career in person["경력"]:
+            if career not in people[identity]["경력"]:
+                people[identity]["경력"].append(career)
+
+    career_pool = []
+    for identity, person in people.items():
+        for career in person["경력"]:
+            career_pool.append((identity, career, person))
+    if len(people) < 2:
+        return None
+
+    targets = [entry for entry in career_pool if sum(1 for other in career_pool if other[0] != entry[0] and other[1] != entry[1]) >= 3]
+    if not targets:
+        return None
+    target_identity, target_career, target_person = random.choice(targets)
+    target_name = target_person["이름"]
+    distractors = list(dict.fromkeys(
+        career for identity, career, _ in career_pool
+        if identity != target_identity and career != target_career
+    ))
+    if len(distractors) < 3:
+        return None
+    choices = random.sample(distractors, 3) + [target_career]
+    random.shuffle(choices)
+    election_context = target_person["선거"] if target_person["선거"] != "정보 없음" else "후보자 통합검색 자료"
+    district_context = f" {target_person['선거구']}" if target_person["선거구"] != "정보 없음" else ""
+    return {
+        "분야": "실시간 정치인 경력",
+        "문제": f"{election_context}{district_context}에 출마한 {target_name}의 후보자 자료에 기록된 경력은 무엇일까요?",
+        "선택지": choices,
+        "정답": choices.index(target_career) + 1,
+        "해설": f"중앙선거관리위원회 후보자 자료에서 {target_name}의 {election_context}{district_context} 관련 경력으로 '{target_career}'이(가) 확인됩니다. 동일 이름의 후보자가 있을 수 있으므로 선거 ID·선거구·정당 및 원자료를 함께 확인해야 합니다.",
+        "난이도": "실시간 자료",
+        "출처": "https://www.data.go.kr/data/15140045/openapi.do",
     }
 
 
@@ -1477,7 +1709,7 @@ def render_home(quiz_questions):
         with badge_col:
             st.markdown("<div style='text-align:right'><span style='background:#d7f4e4;color:#08783b;padding:4px 10px;border-radius:20px;font-size:.82rem'>오늘의 문제</span></div>", unsafe_allow_html=True)
         st.caption("※ 국회·선거·행정부 관련 자료를 바탕으로 한 퀴즈가 제공됩니다.")
-        st.caption("오늘의 문제는 Quiz.txt의 등록 문항에서 출제되며, API 실시간 자료 퀴즈는 퀴즈 화면에서 이용할 수 있습니다.")
+        st.caption("오늘의 교과 퀴즈는 Quiz.txt에서 출제하고, 실시간 인물 퀴즈는 정치인·당선인 API 자료를 이용합니다.")
         today_question = None
         if quiz_questions:
             digest = int(korea_today().strftime("%Y%m%d"))
@@ -1611,13 +1843,30 @@ def render_news():
             for issue in source_issues:
                 st.warning(issue)
 
-    col_domestic, col_global = st.columns(2, gap="medium")
+    focus = st.session_state.get("news_focus", "")
+    if focus in ("국내", "국제"):
+        top_col, reset_col = st.columns([5, 1])
+        with top_col:
+            st.info(f"메인 화면에서 선택한 **{focus} 뉴스**를 우선 표시하고 있습니다. 반대 영역도 함께 확인할 수 있습니다.")
+        with reset_col:
+            if st.button("선택 해제", key="news_focus_clear", use_container_width=True):
+                st.session_state.news_focus = ""
+                st.rerun()
+
+    # 국내·국제의 좌우 위치는 유지하되, 메인 화면에서 선택한 쪽을 넓게 보여 줍니다.
+    if focus == "국내":
+        col_domestic, col_global = st.columns([1.35, 1], gap="medium")
+    elif focus == "국제":
+        col_domestic, col_global = st.columns([1, 1.35], gap="medium")
+    else:
+        col_domestic, col_global = st.columns(2, gap="medium")
     for col, title, items, errors in [
         (col_domestic, "국내", domestic, domestic_errors),
         (col_global, "국제", international, international_errors),
     ]:
         with col:
-            st.markdown(f"### {title}")
+            suffix = " · 선택" if focus == title else ""
+            st.markdown(f"### {title}{suffix}")
             with st.container(height=650, border=True):
                 if not items:
                     st.info("기사를 불러오지 못했습니다. NEWS.txt의 RSS 주소와 언론사 서버 상태를 확인해 주세요.")
@@ -1686,6 +1935,14 @@ def _api_item_icon(item_id):
 def render_api_catalog():
     render_hero("정치 자료 탐색", "공식 공공데이터를 사람이 읽기 쉬운 표로 확인하고 관련 교과 개념을 함께 살펴보세요.")
     st.caption("※ 국회·선거·행정부 관련 자료는 퀴즈 출제에도 활용됩니다.")
+    configured_count = sum(api_key_is_configured(item["key"]) for item in API_ITEMS.values())
+    duplicate_count = sum(api_key_status(item["key"]) == "중복" for item in API_ITEMS.values())
+    st.info(
+        f"API별 개별 인증키 등록 상태: {configured_count}/12개 · "
+        "각 API는 서로 다른 인증키를 사용합니다. 같은 기관의 키를 공유하지 않습니다."
+    )
+    if duplicate_count:
+        st.warning(f"인증키 값이 다른 API와 중복된 항목이 {duplicate_count}개 있습니다. 중복 키는 안전을 위해 API 요청에 사용하지 않습니다.")
     for group in API_GROUPS:
         st.divider()
         head, count_col = st.columns([4, 1])
@@ -1704,6 +1961,7 @@ def render_api_catalog():
                     f'<div class="api-card"><div style="font-size:1.35rem">{_api_item_icon(item_id)}</div>'
                     f'<div class="api-card-title">{html.escape(item["title"])}</div>'
                     f'<div class="api-card-desc">{html.escape(item["description"])}</div>'
+                    f'<p class="tiny-note"><b>인증키 상태</b> · {html.escape(api_key_status(item["key"]))}</p>'
                     f'<p class="tiny-note"><b>교과 연계</b><br>{html.escape(API_EDUCATION.get(item_id, "정치 제도와 공공자료 이해"))}</p>'
                     f'<span style="font-size:.75rem;background:var(--secondary-background-color);padding:3px 8px;border-radius:15px">원자료 · 표/엑셀 · 항목 검색</span></div>',
                     unsafe_allow_html=True,
@@ -1751,6 +2009,13 @@ def render_api_detail(item_id):
             st.session_state.api_detail_error = ""
             st.session_state.api_detail_item = ""
             st.rerun()
+
+    key_name = item.get("key", "")
+    if key_name:
+        if api_key_is_configured(key_name):
+            st.caption("🔑 이 API 전용 인증키가 Secrets에 등록되어 있습니다.")
+        else:
+            st.warning(f"이 자료를 조회하려면 Streamlit Secrets의 API_KEYS.{key_name}에 해당 API 전용 인증키를 등록해야 합니다.")
 
     st.markdown("### 이 자료는 무엇인가?")
     st.write(item["description"])
@@ -1806,7 +2071,7 @@ def render_api_detail(item_id):
         st.caption("KOSIS는 통계목록 ID와 통계표의 기관·항목·분류 코드가 필요합니다.")
         c1, c2 = st.columns(2)
         with c1:
-            view_code = st.selectbox("통계 목록 유형", ["MT_GTITLE02", "MT_GTITLE01", "MT_ZTITLE", "MT_OTITLE"], key="detail_kosis_view")
+            view_code = st.selectbox("통계 목록 유형", ["MT_GTITLE01", "MT_GTITLE02", "MT_GTITLE03", "MT_ZTITLE", "MT_OTITLE"], key="detail_kosis_view")
         with c2:
             parent_id = st.text_input("목록 ID (처음 조회는 A)", value="A", key="detail_kosis_parent")
         if st.button("통계표 목록 불러오기", key="detail_kosis_list"):
@@ -1926,11 +2191,20 @@ def normalize_vworld_geojson(payload):
 def load_vworld_geojson(level: str):
     key = api_key("VWORLD_KEY")
     if not key:
-        return None, "Streamlit Secrets에 VWORLD_KEY를 등록해 주세요."
+        return None, api_key_error_message("VWORLD_KEY")
     domain = get_secret("APP", "VWORLD_DOMAIN", "")
     parsed_domain = urlsplit(domain)
-    if _is_placeholder(domain) or parsed_domain.scheme not in ("https", "http") or not parsed_domain.netloc:
-        return None, "브이월드에 등록한 실제 서비스 도메인을 APP.VWORLD_DOMAIN에 입력해 주세요."
+    if (
+        _is_placeholder(domain)
+        or parsed_domain.scheme != "https"
+        or not parsed_domain.hostname
+        or parsed_domain.username is not None
+        or parsed_domain.password is not None
+        or parsed_domain.path not in ("", "/")
+        or parsed_domain.query
+        or parsed_domain.fragment
+    ):
+        return None, "브이월드에 등록한 HTTPS 서비스 도메인만 APP.VWORLD_DOMAIN에 입력해 주세요. 경로나 쿼리는 제외합니다."
     # VWorld 행정구역 레이어 식별자는 공식 레이어 코드 표기(대문자)를 유지합니다.
     layer = {
         "시도": "LT_C_ADSIDO_INFO",
@@ -2001,6 +2275,17 @@ def region_code(feature, candidates):
     return digits.zfill(2) if len(digits) == 1 else digits
 
 
+def population_admin_code_from_feature(feature):
+    """WFS 속성에 주민등록 행정기관코드가 명시된 경우에만 자동 사용합니다.
+
+    VWorld의 법정구역 코드(sig_cd 등)를 주민등록 행정기관코드로 간주하지 않습니다.
+    """
+    return region_code(feature, (
+        "adm_cd", "ADM_CD", "admCd", "ADM_CD_10", "admin_code", "adminCode",
+        "행정기관코드", "행정기관코드값",
+    ))
+
+
 def filter_sigungu_geojson(geojson, sido_code):
     if not geojson or not sido_code:
         return None, "시도 코드가 없어 시군구 자료를 구분할 수 없습니다."
@@ -2025,7 +2310,38 @@ def build_admin_map(geojson, zoom):
     tooltip_field = next((field for field in name_fields if all(field in props for props in properties)), None)
     tooltip = folium.GeoJsonTooltip(fields=[tooltip_field], aliases=["행정구역"], sticky=True) if tooltip_field else None
     map_geojson = {"type": "FeatureCollection", "features": features}
-    m = folium.Map(location=[36.3, 127.8], zoom_start=zoom, tiles="CartoDB positron", control_scale=True)
+    m = folium.Map(location=[36.3, 127.8], zoom_start=zoom, tiles=None, control_scale=True)
+    vworld_key = api_key("VWORLD_KEY")
+    if vworld_key:
+        # VWorld 공식 Folium 예제의 WMTS Base 타일 경로를 사용합니다.
+        # 이 URL은 브라우저에서 직접 호출되므로 VWorld 콘솔에서 등록 도메인을 제한해야 합니다.
+        folium.TileLayer(
+            tiles=f"https://api.vworld.kr/req/wmts/1.0.0/{quote_plus(vworld_key)}/Base/{{z}}/{{y}}/{{x}}.png",
+            attr="공간정보 오픈플랫폼(브이월드)",
+            name="브이월드 기본지도",
+            overlay=False,
+            control=True,
+            show=True,
+            max_zoom=19,
+        ).add_to(m)
+        # VWorld 타일 장애 시 사용자가 직접 전환할 수 있는 대체 배경입니다.
+        folium.TileLayer(
+            tiles="CartoDB positron",
+            attr="CartoDB",
+            name="대체 배경지도",
+            overlay=False,
+            control=True,
+            show=False,
+        ).add_to(m)
+    else:
+        folium.TileLayer(
+            tiles="CartoDB positron",
+            attr="CartoDB",
+            name="대체 배경지도 (VWorld 키 미등록)",
+            overlay=False,
+            control=True,
+            show=True,
+        ).add_to(m)
     boundary_layer = folium.GeoJson(
         map_geojson,
         name="행정구역",
@@ -2052,109 +2368,303 @@ def build_admin_map(geojson, zoom):
 # 14. 화면: 정부 조직 / 국회 조직 / 법원 조직
 # ============================================================
 
-def render_node(title, role, key):
+ORG_DETAILS = {
+    "president": {
+        "title": "대통령", "head": "대통령", "parent": "국가 최고 행정부", 
+        "duty": "국가원수이자 행정부 수반으로서 헌법과 법률이 정한 국가 운영 권한과 책임을 수행합니다.",
+        "children": "대통령 소속기관 및 국무총리·중앙행정기관과 관련됩니다.",
+        "scale": "기관별 인력은 행정안전부 공무원 정원 통계와 각 기관 자료로 확인합니다.",
+        "note": "정부 조직도는 이해를 위한 상위 구조입니다. 모든 기관이 대통령의 직접 지휘를 받는다는 뜻은 아닙니다.",
+        "source": "https://www.org.go.kr/"
+    },
+    "presidential": {
+        "title": "대통령 소속기관", "head": "기관별 장(원장·위원장 등)", "parent": "대통령 관련 조직",
+        "duty": "국가 감사, 국가안보, 정보, 경호 등 헌법과 법률에 따라 정해진 기능을 수행하는 기관들이 포함됩니다.",
+        "children": "감사원·국가정보원·대통령비서실·국가안보실·대통령경호처 등. 기관별 법적 소속과 독립성은 각각 다릅니다.",
+        "scale": "기관별 정원은 각 기관의 공식 자료를 기준으로 확인합니다.",
+        "note": "화면은 대표 사례를 묶은 개요이며, 모든 기관의 세부 지휘 관계를 하나로 단순화하지 않습니다.",
+        "source": "https://www.org.go.kr/"
+    },
+    "prime": {
+        "title": "국무총리", "head": "국무총리", "parent": "대통령의 보좌 및 행정 각부 통할",
+        "duty": "대통령을 보좌하고 행정 각부를 통할합니다.",
+        "children": "국무조정실·국무총리비서실 및 법령상 국무총리 소속 기관과 관련됩니다.",
+        "scale": "하부기구와 공무원 정원은 행정안전부 승인 통계로 확인합니다.",
+        "note": "국무총리 소속기관과 중앙행정기관의 소속 관계는 기관별 법령·직제에 따라 다릅니다.",
+        "source": "https://www.org.go.kr/"
+    },
+    "central": {
+        "title": "중앙행정기관", "head": "기관 유형에 따라 장관·처장·청장·위원장 등", "parent": "정부조직법과 개별 설치 법령",
+        "duty": "전국 범위의 국가 행정사무를 담당합니다. 부·처·청 등은 법적 설치 근거와 소속 관계가 서로 다릅니다.",
+        "children": "부·처·청 및 법률에 따라 설치된 합의제 행정기관 등으로 구성됩니다.",
+        "scale": "기관별 공무원 정원 및 하부기구 통계는 아래 행정안전부 자료 조회를 이용합니다.",
+        "note": "중앙행정기관 수는 기준일에 따라 달라질 수 있습니다.",
+        "source": "https://www.org.go.kr/intrcn/orgnzt/viewSystm.do"
+    },
+    "ministry": {
+        "title": "부", "head": "장관", "parent": "대통령·국무총리 통할 아래 국가행정사무 수행",
+        "duty": "기능별 또는 대상별로 국가 행정사무를 담당하는 행정각부입니다.",
+        "children": "각 부의 소속청 및 소속기관은 개별 직제에 따릅니다.",
+        "scale": "기준일 2026-10-02 정부기구도에 19부로 표시됩니다.",
+        "note": "개별 부의 명칭과 소속기관은 정부조직 개편에 따라 변경될 수 있습니다.",
+        "source": "https://www.org.go.kr/orgnzt/chart/viewEng.do"
+    },
+    "office": {
+        "title": "처", "head": "처장", "parent": "주로 국무총리 소속",
+        "duty": "여러 부에 관련되는 기능을 통합하거나 전문적인 행정 업무를 담당합니다.",
+        "children": "각 처의 하부조직은 해당 기관의 직제에 따릅니다.",
+        "scale": "기준일 2026-10-02 정부기구도에 6처로 표시됩니다.",
+        "note": "처의 법적 소속·권한은 개별 설치 법령을 함께 확인해야 합니다.",
+        "source": "https://www.org.go.kr/intrcn/orgnzt/viewSystm.do"
+    },
+    "agency": {
+        "title": "청", "head": "청장", "parent": "일반적으로 소관 행정각부 소속",
+        "duty": "독자성이 높고 집행적인 행정사무를 전문적으로 담당합니다.",
+        "children": "소속기관과 하부기구는 각 청의 직제에 따릅니다.",
+        "scale": "기준일 2026-10-02 정부기구도에 19청으로 표시됩니다.",
+        "note": "모든 청이 동일한 부에 소속되는 것은 아니므로 기관별 소속 관계를 확인합니다.",
+        "source": "https://www.org.go.kr/intrcn/orgnzt/viewSystm.do"
+    },
+    "commission": {
+        "title": "위원회", "head": "위원장", "parent": "설치 법률에 따른 독립·소속 합의제 기관",
+        "duty": "정책 심의·의결, 규제·감독 등 법률로 정한 합의제 행정 기능을 수행합니다.",
+        "children": "상임위원·사무처 등 세부 구성은 위원회마다 다릅니다.",
+        "scale": "기준일 2026-10-02 정부기구도에 6위원회로 표시됩니다.",
+        "note": "위원회는 설치 근거와 소속이 서로 다를 수 있습니다.",
+        "source": "https://www.org.go.kr/intrcn/orgnzt/viewSystm.do"
+    },
+    "institute": {
+        "title": "원", "head": "원장", "parent": "기관별 설치 법령",
+        "duty": "감사·연구·통계 등 기관별 고유 기능을 수행합니다.",
+        "children": "원별 세부 조직과 소속은 공식 조직도를 확인합니다.",
+        "scale": "정부기구도 참고 분류에 포함된 유형입니다. 기관별 수와 범위는 공식 기준일 자료를 확인합니다.",
+        "note": "원은 단일한 소속 형태를 의미하지 않습니다.",
+        "source": "https://www.org.go.kr/"
+    },
+    "office_unit": {
+        "title": "실", "head": "실장", "parent": "대통령·국무총리 또는 각 기관 내부 조직",
+        "duty": "정책 조정·지원·기획 등 기관별 기능을 수행합니다.",
+        "children": "실·국·과 등 하부조직은 해당 기관 직제에 따릅니다.",
+        "scale": "정부기구도에 표시된 보조기관 유형입니다. 세부 정원은 기관별 자료로 확인합니다.",
+        "note": "실은 기관 자체와 구별되는 내부·보조 조직일 수 있습니다.",
+        "source": "https://www.org.go.kr/"
+    },
+    "assembly": {
+        "title": "대한민국 국회", "head": "국회의장", "parent": "입법부·국민의 대표기관",
+        "duty": "법률 제정, 국가 예산 심의·확정, 국정 감시 등 헌법상 권한을 수행합니다.",
+        "children": "국회의장단, 위원회, 국회사무처, 국회 소속기관 등으로 구성됩니다.",
+        "scale": "의원 구성·위원회·의사일정은 열린국회정보 API 및 국회 공식 자료를 이용합니다.",
+        "note": "국회는 행정부의 하위기관이 아닌 별도의 헌법기관입니다.",
+        "source": "https://www.assembly.go.kr/"
+    },
+    "chair": {
+        "title": "국회의장단", "head": "국회의장·국회부의장", "parent": "대한민국 국회",
+        "duty": "국회 회의를 주재하고 의사 진행 및 국회 운영을 조정합니다.",
+        "children": "의장과 부의장으로 구성됩니다.", "scale": "인적 구성은 국회 공식 홈페이지에서 확인합니다.",
+        "note": "의장단은 국회 운영을 담당하며 각 위원회의 심사 기능과 구별됩니다.", "source": "https://www.assembly.go.kr/"
+    },
+    "committee": {
+        "title": "위원회", "head": "위원장", "parent": "대한민국 국회",
+        "duty": "소관 분야의 법률안·예산안·청원 등을 심사합니다.",
+        "children": "상임위원회와 특별위원회 등으로 구성됩니다.", "scale": "현재 위원회 명단과 구성은 국회 공식 자료로 확인합니다.",
+        "note": "위원회별 소관 분야와 구성은 회기·국회 운영에 따라 변동될 수 있습니다.", "source": "https://www.assembly.go.kr/"
+    },
+    "secretariat": {
+        "title": "국회사무처", "head": "국회사무총장", "parent": "대한민국 국회",
+        "duty": "국회의 의정활동과 입법·행정 업무를 지원합니다.",
+        "children": "의사·행정·입법 지원 부서 등으로 구성되며 세부 직제는 공식 자료를 따릅니다.",
+        "scale": "공식 조직 및 인사 자료를 기준으로 확인합니다.", "note": "국회의 의정활동 지원 조직입니다.", "source": "https://www.assembly.go.kr/"
+    },
+    "affiliated": {
+        "title": "국회 소속기관", "head": "기관별 기관장", "parent": "대한민국 국회",
+        "duty": "국회도서관·국회예산정책처·국회입법조사처 등 전문 자료·분석 업무를 수행합니다.",
+        "children": "국회도서관, 국회예산정책처, 국회입법조사처 등.",
+        "scale": "기관별 조직도와 정원은 각 기관 공식 자료를 확인합니다.", "note": "국회 본회의·위원회와 구별되는 전문 지원기관입니다.", "source": "https://www.assembly.go.kr/"
+    },
+    "supreme": {
+        "title": "대법원", "head": "대법원장", "parent": "대한민국 법원의 최고법원",
+        "duty": "상고사건 등을 최종심으로 심판하고 법원 조직의 최고기관 역할을 합니다.",
+        "children": "고등법원·지방법원 및 전문법원 체계와 관련되며, 법원행정처 등 지원 조직이 있습니다.",
+        "scale": "법원별 관할·설치 현황은 법원 공식 조직 안내를 확인합니다.",
+        "note": "법원의 종류 간 심급·관할 관계는 화면의 단순 상하 배열과 다를 수 있습니다.",
+        "source": "https://www.scourt.go.kr/judiciary/organization/chart/index.html"
+    },
+    "high": {
+        "title": "고등법원", "head": "법원장", "parent": "대한민국 법원",
+        "duty": "주로 지방법원 등의 판결에 대한 항소·항고 사건을 심판합니다.",
+        "children": "서울·대전·대구·부산·광주·수원 고등법원 및 원외재판부 등.",
+        "scale": "법원별 관할 및 설치 장소는 공식 법원 조직 안내를 확인합니다.", "note": "일반적인 재판의 항소심을 담당합니다.", "source": "https://www.scourt.go.kr/judiciary/organization/high/index.html"
+    },
+    "district": {
+        "title": "지방법원", "head": "법원장", "parent": "대한민국 법원",
+        "duty": "일반적인 민사·형사 사건의 1심 등을 담당합니다.",
+        "children": "지원·시군법원·등기소 등이 설치될 수 있습니다.", "scale": "관할과 설치 현황은 공식 법원 조직 안내를 확인합니다.",
+        "note": "사건 종류와 절차에 따라 관할·심급이 달라질 수 있습니다.", "source": "https://www.scourt.go.kr/"
+    },
+    "special": {
+        "title": "전문법원", "head": "법원장", "parent": "법원 체계 내 전문 관할 법원",
+        "duty": "특정 분야 사건을 전문적으로 담당합니다.",
+        "children": "특허법원·가정법원·행정법원·회생법원 등.",
+        "scale": "법원마다 담당 사건과 심급이 다릅니다.", "note": "특허법원은 고등법원급, 가정·행정·회생법원은 지방법원급으로 이해하면 되며 세부 관할은 별도 확인합니다.",
+        "source": "https://www.scourt.go.kr/judiciary/organization/specialized/index.html"
+    },
+    "court_admin": {
+        "title": "법원행정처 등", "head": "법원행정처장 등", "parent": "대법원 소속 사법행정 지원 조직",
+        "duty": "법원의 인사·예산·시설 등 사법행정을 지원합니다.",
+        "children": "법원행정처·법원도서관·사법연수원·법원공무원교육원 등.",
+        "scale": "세부 조직은 대법원 공식 조직도를 확인합니다.", "note": "재판을 담당하는 법원과 사법행정 지원 조직을 구분합니다.", "source": "https://www.scourt.go.kr/judiciary/organization/chart/index.html"
+    },
+    "local_executive": {
+        "title": "지방 행정부", "head": "시·도지사 또는 시장·군수·구청장", "parent": "해당 지방자치단체의 집행기관",
+        "duty": "지역 정책과 예산을 집행하고 주민 생활과 지역 행정을 담당합니다.",
+        "children": "부단체장, 실·국·본부, 과·담당관 등. 실제 편제는 지방자치단체마다 다릅니다.",
+        "scale": "해당 지자체의 공식 조직도·정원 자료가 필요합니다.",
+        "note": "화면은 일반적인 구조 예시이며 선택 지역의 실제 조직도를 복제한 것이 아닙니다.", "source": "https://www.mois.go.kr/"
+    },
+    "local_council": {
+        "title": "지방 의회", "head": "지방의회 의장", "parent": "해당 지방자치단체의 의결기관",
+        "duty": "조례 제정·개정, 예산 심의·확정, 행정사무 감사·조사 등 지방자치단체의 주요 사항을 심의·의결합니다.",
+        "children": "의장단, 상임·특별위원회, 의회사무국·의회사무과 등. 실제 편제는 지방의회마다 다릅니다.",
+        "scale": "행정안전부 통계연보의 기수별 지방의회의원 정수는 참고 자료이며 현재 특정 지역의 의석 수로 단정할 수 없습니다.",
+        "note": "지역별 공식 조직도 데이터는 별도 확보 전까지 일반 구조로 표시합니다.", "source": "https://www.mois.go.kr/"
+    },
+}
+
+
+def _org_open_detail(detail_key: str, return_page: str):
+    st.session_state.org_detail = detail_key
+    st.session_state.org_return_page = return_page
+    st.session_state.page = "기관 상세"
+    st.rerun()
+
+
+def render_node(title, role, key, detail_key=None, return_page=None, icon=""):
+    """조직도 노드를 표시합니다. 마우스오버 정보만 제공하고 클릭 이동은 하지 않습니다.
+
+    이전 합의에서는 기관 상세 페이지 이동을 후속 확장으로 남겨 두었습니다.
+    따라서 카드 클릭으로 다른 페이지에 진입시키지 않고, 기본 브라우저 툴팁으로
+    기관장·핵심 업무·조직 규모만 간략히 제공합니다. 상하·소속 관계는 도표에 둡니다.
+    """
+    detail_key = detail_key or key
+    detail = ORG_DETAILS.get(detail_key, {})
+    tooltip = "\n".join([
+        f"기관장 직위: {detail.get('head', '기관별 상이')}",
+        f"주요 업무: {detail.get('duty', role)}",
+        f"조직 규모: {detail.get('scale', '공식 자료 확인')}",
+        f"참고: {detail.get('note', '세부 사항은 공식 자료 확인')}",
+    ])
+    icon_html = f'<span class="org-node-icon">{html.escape(icon)}</span>' if icon else ""
     st.markdown(
-        f'<div class="org-node" title="{html.escape(role)}"><strong>{html.escape(title)}</strong><br>'
-        f'<small>{html.escape(role)}</small></div>',
+        '<div class="org-node org-node-hover" title="' + html.escape(tooltip, quote=True) + '">'
+        + icon_html
+        + '<div class="org-node-title">' + html.escape(str(title)) + '</div>'
+        + '<div class="org-node-role">' + html.escape(str(role)) + '</div>'
+        + '</div>',
         unsafe_allow_html=True,
     )
-    if st.button(f"{title} 자세히 보기", key=f"org_detail_{key}", use_container_width=True):
-        st.session_state.org_detail = title
-        st.session_state.org_return_page = st.session_state.get("page", "정부 조직")
-        st.session_state.page = "기관 상세"
-        st.rerun()
 
 
 def render_government():
-    render_hero("정부 조직", "행정부의 기본 구조와 중앙행정기관 관련 통계를 살펴봅니다.")
-    st.info("정부 조직은 개편될 수 있습니다. 정부디렉터리시스템 API는 신청 대기 중이므로, 현재 화면은 헌법상 기본 구조와 승인된 행정안전부 통계를 중심으로 구성했습니다.")
-    render_node("대통령", "행정부 수반 · 국가원수", "president")
-    st.markdown("<div style='text-align:center'>↓</div>", unsafe_allow_html=True)
-    render_node("국무총리", "대통령을 보좌하고 행정 각부를 통할", "prime")
-    st.markdown("<div style='text-align:center'>↓</div>", unsafe_allow_html=True)
-    render_node("중앙행정기관", "부·처·청 등 중앙행정기관이 정책과 행정업무 수행", "ministries")
+    render_hero("정부 조직", "행정부의 상하·소속 관계와 중앙행정기관의 유형을 살펴봅니다.")
+    st.caption("조직 기준일: 2026.10.02 · 정부조직관리정보시스템의 공식 정부기구도 기준. 이후 조직 개편은 공식 자료를 다시 확인해야 합니다.")
+    with st.container(border=True):
+        center = st.columns([1, 2, 1])[1]
+        with center:
+            render_node("대통령", "국가원수 · 행정부 수반", "president", "president", "정부 조직", "🏛️")
+        st.markdown('<div class="org-arrow">↓</div>', unsafe_allow_html=True)
+        c1, c2 = st.columns(2, gap="medium")
+        with c1:
+            render_node("대통령 소속기관", "소속·직속 기관", "presidential", "presidential", "정부 조직", "🏢")
+        with c2:
+            render_node("국무총리", "대통령 보좌 · 행정 각부 통할", "prime", "prime", "정부 조직", "▣")
+        st.markdown('<div class="org-arrow">↓</div>', unsafe_allow_html=True)
+        st.markdown("**중앙행정기관 및 주요 기관 유형**")
+        cols = st.columns(3, gap="small")
+        categories = [
+            ("부", "19개", "ministry", "각부 장관이 소관 국가행정사무를 통할"),
+            ("처", "6개", "office", "여러 부에 걸친 전문·통합 행정 기능"),
+            ("청", "19개", "agency", "집행 중심의 전문 행정사무"),
+            ("위원회", "6개", "commission", "법률에 따른 합의제 행정 기능"),
+            ("원", "유형", "institute", "감사·연구·통계 등 기관별 고유 기능"),
+            ("실", "유형", "office_unit", "정책 조정·기획·지원 등 보조 기능"),
+        ]
+        for index, (title, count, key, desc) in enumerate(categories):
+            with cols[index % 3]:
+                render_node(title, f"{count} · {desc}", key, key, "정부 조직")
+        st.caption("공식 정부기구도 기준일의 부·처·청·위원회 수를 표시했습니다. 원·실은 조직 유형이며 중앙행정기관의 종류와 동일한 법적 범주로 단순 합산하지 않습니다.")
 
-    if st.session_state.org_detail:
-        render_org_detail()
-
-    st.divider()
-    render_section("중앙행정기관 관련 통계")
     a, b = st.columns(2)
     with a:
-        if st.button("기관별 공무원 정원 조회", use_container_width=True):
-            rows, message = data_go_call("staff")
-            st.session_state.gov_staff_rows = rows
-            st.session_state.gov_staff_error = message
-        if st.session_state.get("gov_staff_error"):
-            st.warning(st.session_state.gov_staff_error)
-        if st.session_state.get("gov_staff_rows"):
-            table_view(st.session_state.gov_staff_rows, 120)
+        if st.button("기관별 공무원 정원 통계 보기", use_container_width=True):
+            st.session_state.page = "정치 자료 탐색"
+            st.session_state.api_selected_item = "staff"
+            st.rerun()
     with b:
-        if st.button("기관별 하부기구 통계 조회", use_container_width=True):
-            rows, message = data_go_call("suborg")
-            st.session_state.gov_suborg_rows = rows
-            st.session_state.gov_suborg_error = message
-        if st.session_state.get("gov_suborg_error"):
-            st.warning(st.session_state.gov_suborg_error)
-        if st.session_state.get("gov_suborg_rows"):
-            table_view(st.session_state.gov_suborg_rows, 120)
+        if st.button("중앙행정기관 하부기구 통계 보기", use_container_width=True):
+            st.session_state.page = "정치 자료 탐색"
+            st.session_state.api_selected_item = "suborg"
+            st.rerun()
+    st.link_button("정부조직관리정보시스템 공식 자료", "https://www.org.go.kr/orgnzt/chart/viewEng.do")
 
 
 def render_congress():
     render_hero("국회 조직", "입법부의 주요 기관과 국회의 기능을 살펴봅니다.")
-    render_node("대한민국 국회", "국민의 대표기관 · 입법기관", "assembly")
-    cols = st.columns(2)
-    for col, title, role, key in [
-        (cols[0], "국회의장단", "의장과 부의장으로 구성되며 국회 운영을 주재", "chair"),
-        (cols[1], "위원회", "상임위원회와 특별위원회에서 소관 안건 심사", "committee"),
-        (cols[0], "국회사무처", "국회의 의정활동과 행정 업무 지원", "secretariat"),
-        (cols[1], "국회 소속기관", "국회도서관·예산정책처·입법조사처 등", "affiliated"),
-    ]:
-        with col:
-            render_node(title, role, key)
-    if st.session_state.org_detail:
-        render_org_detail()
-    st.link_button("국회 공식 홈페이지", "https://www.assembly.go.kr/")
+    with st.container(border=True):
+        center = st.columns([1, 2, 1])[1]
+        with center:
+            render_node("대한민국 국회", "국민의 대표기관 · 입법기관", "assembly", "assembly", "국회 조직", "🏛️")
+        st.markdown('<div class="org-arrow">↓</div>', unsafe_allow_html=True)
+        left, right = st.columns(2, gap="small")
+        with left:
+            render_node("국회의장단", "국회의장 · 부의장", "chair", "chair", "국회 조직")
+            render_node("국회사무처", "국회 의정·행정 지원", "secretariat", "secretariat", "국회 조직")
+        with right:
+            render_node("위원회", "상임위원회 · 특별위원회", "committee", "committee", "국회 조직")
+            render_node("국회 소속기관", "도서관 · 예산정책처 · 입법조사처 등", "affiliated", "affiliated", "국회 조직")
+    st.link_button("대한민국 국회 공식 홈페이지", "https://www.assembly.go.kr/")
 
 
 def render_court():
-    render_hero("법원 조직", "사법부의 기본적인 법원 체계와 역할을 살펴봅니다.")
-    render_node("대법원", "최고법원 · 사법부의 최고기관", "supreme")
-    cols = st.columns(2)
-    for col, title, role, key in [
-        (cols[0], "고등법원", "주로 지방법원 등의 판결에 대한 항소심 담당", "high"),
-        (cols[1], "지방법원", "일반적인 민사·형사 사건의 1심 등 담당", "district"),
-        (cols[0], "가정법원·행정법원", "가사·소년·행정 등 전문 분야 담당", "special"),
-        (cols[1], "법원행정처", "법원의 인사·예산·시설 등 사법행정 지원", "admin"),
-    ]:
-        with col:
-            render_node(title, role, key)
-    if st.session_state.org_detail:
-        render_org_detail()
-    st.link_button("대한민국 법원 공식 홈페이지", "https://www.scourt.go.kr/")
+    render_hero("법원 조직", "사법부의 기본적인 법원 체계와 법원별 역할을 살펴봅니다.")
+    st.caption("아래는 이해를 위한 조직 개요입니다. 법원의 종류·심급·관할이 모두 동일한 상하 관계라는 뜻은 아닙니다.")
+    with st.container(border=True):
+        center = st.columns([1, 2, 1])[1]
+        with center:
+            render_node("대법원", "대한민국 법원의 최고법원", "supreme", "supreme", "법원 조직", "⚖️")
+        st.markdown('<div class="org-arrow">↓</div>', unsafe_allow_html=True)
+        left, right = st.columns(2, gap="small")
+        with left:
+            render_node("고등법원", "일반 재판의 항소심 중심", "high", "high", "법원 조직")
+            render_node("전문법원", "특허 · 가정 · 행정 · 회생법원 등", "special", "special", "법원 조직")
+        with right:
+            render_node("지방법원", "일반 민사·형사 사건의 1심 등", "district", "district", "법원 조직")
+            render_node("법원행정처 등", "사법행정 및 전문 지원 조직", "court_admin", "court_admin", "법원 조직")
+    st.link_button("대한민국 법원 공식 조직 안내", "https://www.scourt.go.kr/judiciary/organization/chart/index.html")
 
 
 def render_org_detail():
-    title = st.session_state.org_detail
+    detail_key = st.session_state.get("org_detail", "")
+    detail = ORG_DETAILS.get(detail_key)
+    if not detail:
+        st.warning("선택한 기관의 상세 정보를 찾을 수 없습니다.")
+        if st.button("조직도로 돌아가기"):
+            st.session_state.page = st.session_state.get("org_return_page", "정부 조직")
+            st.rerun()
+        return
     st.divider()
-    st.subheader(f"{title} 상세")
-    descriptions = {
-        "대통령": "대통령은 국가원수이며 행정부 수반입니다. 헌법과 법률이 정한 권한과 책임을 수행합니다.",
-        "국무총리": "국무총리는 대통령을 보좌하고 행정 각부를 통할합니다.",
-        "중앙행정기관": "중앙행정기관은 국가 정책을 수립·집행합니다. 부·처·청 등 기관별 설치와 소속 관계는 법령과 공식 조직 자료를 기준으로 확인해야 합니다.",
-        "대한민국 국회": "국회는 법률 제정, 예산안 심의·확정, 국정 감시 등의 기능을 수행합니다.",
-        "국회의장단": "국회의장단은 국회의 회의와 운영을 주재하고 조정합니다.",
-        "위원회": "위원회는 소관 분야의 법률안과 청원 등을 심사합니다.",
-        "국회사무처": "국회사무처는 국회의 의정활동과 입법·행정 업무를 지원합니다.",
-        "국회 소속기관": "국회도서관, 국회예산정책처, 국회입법조사처 등은 전문적인 정보·분석을 제공합니다.",
-        "대법원": "대법원은 대한민국의 최고법원입니다.",
-        "고등법원": "고등법원은 주로 지방법원 등의 판결에 대한 항소심을 담당합니다.",
-        "지방법원": "지방법원은 일반적인 민사·형사 사건의 재판을 담당합니다.",
-        "가정법원·행정법원": "전문 법원은 가사·소년·행정 등 특정 분야 사건을 담당합니다.",
-        "법원행정처": "법원행정처는 법원의 인사·예산·시설 등 사법행정을 지원합니다.",
-    }
-    st.write(descriptions.get(title, "공식 조직 자료가 확인되면 세부 내용을 추가합니다."))
-    if st.button("조직도 화면으로 돌아가기"):
+    st.subheader(detail["title"])
+    st.caption(f"기관장 직위: {detail.get('head', '기관별 상이')} · 상위 소속: {detail.get('parent', '공식 자료 확인')}")
+    st.markdown("**주요 업무**")
+    st.write(detail.get("duty", "공식 자료를 확인해 주세요."))
+    st.markdown("**소속·하부조직**")
+    st.write(detail.get("children", "공식 조직도를 확인해 주세요."))
+    st.markdown("**조직 규모 및 통계**")
+    st.write(detail.get("scale", "공식 통계 확인 필요"))
+    if detail.get("note"):
+        st.info(detail["note"])
+    if detail.get("source"):
+        st.link_button("공식 출처 확인", detail["source"])
+    if st.button("조직도 화면으로 돌아가기", use_container_width=True):
         st.session_state.org_detail = ""
         st.session_state.page = st.session_state.get("org_return_page", "정부 조직")
         st.rerun()
@@ -2165,270 +2675,708 @@ def render_org_detail():
 # ============================================================
 
 
-def _set_local_level(level: str):
-    """위젯 생성 전 실행되는 콜백에서 탐색 단계만 변경합니다."""
-    st.session_state["local_level"] = level
+KOREA_SIDO_FALLBACK = [
+    "서울특별시", "부산광역시", "대구광역시", "인천광역시", "광주광역시", "대전광역시",
+    "울산광역시", "세종특별자치시", "경기도", "강원특별자치도", "충청북도", "충청남도",
+    "전북특별자치도", "전라남도", "경상북도", "경상남도", "제주특별자치도",
+]
 
 
-def _change_local_sido():
-    """기초자치단체 화면에서 시도 선택 단계로 복귀합니다."""
-    st.session_state["local_level"] = "광역자치단체"
-    st.session_state["local_selected_sigungu"] = ""
-    st.session_state["local_selected_sigungu_code"] = ""
-    st.session_state["local_sigungu_geo"] = None
-    st.session_state["local_sigungu_error"] = ""
-    st.session_state["local_population_rows"] = []
-    st.session_state["local_population_error"] = ""
-    st.session_state["local_council_rows"] = []
-    st.session_state["local_council_error"] = ""
-    st.session_state["local_population_admin_code"] = ""
-    st.session_state.pop("local_sigungu_fallback_select", None)
+def _region_cache_key(level: str, region_name: str) -> str:
+    """광역·기초 지역의 통계가 서로 덮어쓰이지 않도록 고유 키를 만듭니다."""
+    return f"{str(level).strip()}::{str(region_name).strip()}"
+
+
+def _region_widget_token(level: str, region_name: str) -> str:
+    raw = _region_cache_key(level, region_name)
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+
+
+def _region_data_cache(level: str, region_name: str) -> dict:
+    cache = st.session_state.get("local_region_data_cache", {})
+    return cache.get(_region_cache_key(level, region_name), {}) if isinstance(cache, dict) else {}
+
+
+def _save_region_data_cache(level: str, region_name: str, **updates):
+    cache = st.session_state.get("local_region_data_cache", {})
+    if not isinstance(cache, dict):
+        cache = {}
+    key = _region_cache_key(level, region_name)
+    current = dict(cache.get(key, {}))
+    current.update(updates)
+    cache[key] = current
+    st.session_state.local_region_data_cache = cache
 
 
 def _reset_local_region_data():
-    """지역 선택이 바뀌면 이전 지역에서 조회한 표와 입력 코드를 지웁니다."""
-    st.session_state["local_population_rows"] = []
-    st.session_state["local_population_error"] = ""
-    st.session_state["local_council_rows"] = []
-    st.session_state["local_council_error"] = ""
-    st.session_state["local_population_admin_code"] = ""
+    """이전 단일 상태 변수는 초기화하되, 지역별로 분리한 조회 캐시는 보존합니다."""
+    for key, value in {
+        "local_population_rows": [], "local_population_error": "",
+        "local_council_rows": [], "local_council_error": "",
+        "local_kosis_rows": [], "local_kosis_error": "",
+        "local_population_admin_code": "",
+    }.items():
+        st.session_state[key] = value
+
+
+def _select_sido(name: str, feature=None):
+    st.session_state.local_selected_sido = name
+    st.session_state.local_sido_feature = feature
+    st.session_state.local_selected_sido_code = region_code(
+        feature or {}, ("ctprvn_cd", "CTPRVN_CD", "ctprvnCode", "CTP_CD")
+    ) if feature else ""
+    st.session_state.local_selected_sigungu = ""
+    st.session_state.local_selected_sigungu_code = ""
+    st.session_state.local_sigungu_feature = None
+    st.session_state.local_sigungu_geo = None
+    st.session_state.local_sigungu_attempted = False
+    st.session_state.local_stage = "sigungu"
+    st.session_state.page = "지방정부 시군구"
+    _reset_local_region_data()
+
+
+def _select_sigungu(name: str, feature=None):
+    st.session_state.local_selected_sigungu = name
+    st.session_state.local_sigungu_feature = feature
+    st.session_state.local_selected_sigungu_code = region_code(
+        feature or {}, ("sig_cd", "SIG_CD", "sig_cd2", "SIG_CD2")
+    ) if feature else ""
+    st.session_state.local_stage = "detail"
+    st.session_state.page = "지방정부 상세"
+    _reset_local_region_data()
+
+
+def _change_local_sido():
+    st.session_state.local_stage = "sido"
+    st.session_state.page = "지방 정부"
+    st.session_state.local_selected_sido = ""
+    st.session_state.local_selected_sido_code = ""
+    st.session_state.local_sido_feature = None
+    st.session_state.local_selected_sigungu = ""
+    st.session_state.local_selected_sigungu_code = ""
+    st.session_state.local_sigungu_feature = None
+    st.session_state.local_sigungu_geo = None
+    st.session_state.local_sigungu_attempted = False
+    _reset_local_region_data()
 
 
 def _selected_feature_by_tooltip(features, tooltip, name_fields):
     if not tooltip:
         return None
-    normalized = re.sub(r"\s+", " ", html.unescape(str(tooltip))).strip()
+    # 지도 위젯 버전에 따라 tooltip이 HTML 조각으로 돌아오는 경우도 정규화합니다.
+    normalized = html.unescape(str(tooltip))
+    normalized = re.sub(r"<[^>]*>", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
     return next(
-        (feature for feature in features
-         if region_property(feature, name_fields) == normalized),
+        (feature for feature in features if region_property(feature, name_fields) == normalized),
         None,
     )
 
 
-def render_local_government():
-    render_hero("지방 정부", "대한민국 지도에서 지역을 선택해 지방행정·지방의회·지역 통계를 확인합니다.")
-    st.caption("지방의회 정수 자료는 행정안전부 통계연보의 기수별·유형별 집계입니다. 선택한 지역의 현재 의석 수로 단정하지 않습니다.")
-
-    if not HAS_MAP:
-        st.error("지도 기능을 사용하려면 requirements.txt의 folium과 streamlit-folium 설치가 필요합니다.")
-        return
-
-    level = st.radio("탐색 단계", ["광역자치단체", "기초자치단체"], horizontal=True, key="local_level")
-
-    if level == "광역자치단체":
-        if st.session_state.get("local_sido_geo") is None:
-            if st.button("전국 광역자치단체 지도 불러오기", type="primary"):
-                geo, message = load_vworld_geojson("시도")
-                st.session_state.local_sido_geo = geo
-                st.session_state.local_sido_error = message
-                st.session_state.local_sido_last_click_count = 0
-                st.session_state.local_selected_sido = ""
-                st.session_state.local_selected_sido_code = ""
-                st.session_state.local_selected_sigungu = ""
-                st.session_state.local_selected_sigungu_code = ""
-                st.session_state.local_sigungu_geo = None
-                st.session_state.pop("local_sido_fallback_select", None)
-                st.session_state.pop("local_sigungu_fallback_select", None)
-                _reset_local_region_data()
-                st.rerun()
-        if st.session_state.get("local_sido_error"):
-            st.warning(st.session_state.local_sido_error)
-        geo = st.session_state.get("local_sido_geo")
-        if geo:
-            if geo.get("_truncated_notice"):
-                st.warning(geo["_truncated_notice"])
-            map_object = build_admin_map(geo, 7)
-            map_result = st_folium(
-                map_object, height=570, use_container_width=True,
-                returned_objects=["last_active_drawing", "last_object_clicked_tooltip", "last_object_clicked_count"],
-                key="local_sido_map",
-            ) or {}
-            sido_features = geo.get("features", [])
-            click_count = map_result.get("last_object_clicked_count") or 0
-            previous_click_count = st.session_state.get("local_sido_last_click_count", 0)
-            new_map_click = click_count != previous_click_count
-            if new_map_click:
-                st.session_state.local_sido_last_click_count = click_count
-            name_fields = ("ctp_kor_nm", "CTP_KOR_NM", "name", "NAME")
-            drawing = map_result.get("last_active_drawing") if new_map_click else None
-            clicked_feature = drawing if isinstance(drawing, dict) and drawing.get("properties") else None
-            if new_map_click and clicked_feature is None:
-                clicked_feature = _selected_feature_by_tooltip(
-                    sido_features, map_result.get("last_object_clicked_tooltip"), name_fields
-                )
-            if clicked_feature:
-                props = clicked_feature.get("properties", {}) or {}
-                selected = region_property({"properties": props}, name_fields)
-                selected_code = region_code({"properties": props}, ("ctprvn_cd", "CTPRVN_CD"))
-                if selected != "이름 정보 없음" and selected != st.session_state.get("local_selected_sido"):
-                    st.session_state.local_selected_sido = selected
-                    st.session_state.local_selected_sido_code = selected_code
-                    st.session_state.local_sido_fallback_select = selected
-                    st.session_state.local_sigungu_geo = None
-                    st.session_state.local_selected_sigungu = ""
-                    st.session_state.local_selected_sigungu_code = ""
-                    _reset_local_region_data()
-
-            sido_names = [region_property(feature, name_fields) for feature in sido_features]
-            sido_names = [name for name in sido_names if name != "이름 정보 없음"]
-            if sido_names:
-                current = st.session_state.get("local_selected_sido", "")
-                sido_options = ["선택하세요"] + sido_names
-                default_index = sido_options.index(current) if current in sido_names else 0
-                # 위젯을 만들기 전에 선택 상태를 맞춰 지도 클릭과 목록 선택이 어긋나지 않게 합니다.
-                if current in sido_names and st.session_state.get("local_sido_fallback_select") != current:
-                    st.session_state.local_sido_fallback_select = current
-                chosen = st.selectbox(
-                    "지도에서 선택하지 못했거나 목록으로 선택하려면 지역을 고르세요.",
-                    sido_options, index=default_index, key="local_sido_fallback_select",
-                )
-                if chosen and chosen != "선택하세요" and chosen != st.session_state.get("local_selected_sido"):
-                    feature = next((f for f in sido_features if region_property(f, name_fields) == chosen), {})
-                    st.session_state.local_selected_sido = chosen
-                    st.session_state.local_selected_sido_code = region_code(feature, ("ctprvn_cd", "CTPRVN_CD"))
-                    st.session_state.local_sigungu_geo = None
-                    st.session_state.local_selected_sigungu = ""
-                    st.session_state.local_selected_sigungu_code = ""
-                    _reset_local_region_data()
-                    st.rerun()
-
-            selected = st.session_state.get("local_selected_sido", "")
-            if selected:
-                st.success(f"선택한 광역자치단체: {selected}")
-                st.button(
-                    "이 지역의 기초자치단체 보기", type="primary",
-                    on_click=_set_local_level, args=("기초자치단체",),
-                    key="go_local_sigungu",
-                )
-
+def _ensure_local_map(level: str):
+    """페이지 진입 시 한 번만 행정구역을 불러옵니다. 오류면 선택 목록으로 대체합니다."""
+    if level == "시도":
+        if st.session_state.get("local_sido_attempted"):
+            return st.session_state.get("local_sido_geo"), st.session_state.get("local_sido_error", "")
+        st.session_state.local_sido_attempted = True
+        with st.spinner("전국 행정구역 지도를 불러오는 중입니다..."):
+            geo, message = load_vworld_geojson("시도")
+        st.session_state.local_sido_geo = geo
+        st.session_state.local_sido_error = message
+        return geo, message
+    if st.session_state.get("local_sigungu_attempted"):
+        return st.session_state.get("local_sigungu_geo"), st.session_state.get("local_sigungu_error", "")
+    st.session_state.local_sigungu_attempted = True
+    with st.spinner(f"{st.session_state.get('local_selected_sido', '선택 지역')}의 시·군·구 경계를 불러오는 중입니다..."):
+        raw_geo, message = load_vworld_geojson("시군구")
+    if raw_geo:
+        filtered, filter_message = filter_sigungu_geojson(
+            raw_geo, st.session_state.get("local_selected_sido_code", "")
+        )
+        geo = filtered
+        message = filter_message
     else:
-        selected_sido = st.session_state.get("local_selected_sido", "")
-        selected_sido_code = st.session_state.get("local_selected_sido_code", "")
-        if not selected_sido:
-            st.info("먼저 '광역자치단체' 단계에서 시·도를 선택해 주세요.")
-            st.button("광역자치단체 단계로 이동", on_click=_set_local_level, args=("광역자치단체",))
-        else:
-            st.caption(f"상위 지역: {selected_sido}")
-            st.button("다른 광역자치단체 선택", key="local_change_sido", on_click=_change_local_sido)
+        geo = None
+    st.session_state.local_sigungu_geo = geo
+    st.session_state.local_sigungu_error = message
+    return geo, message
 
-            if st.session_state.get("local_sigungu_geo") is None:
-                if st.button("시군구 경계 불러오기", type="primary"):
-                    raw_geo, message = load_vworld_geojson("시군구")
-                    if raw_geo:
-                        filtered_geo, filter_message = filter_sigungu_geojson(raw_geo, selected_sido_code)
-                        st.session_state.local_sigungu_geo = filtered_geo
-                        message = filter_message
-                    else:
-                        st.session_state.local_sigungu_geo = None
-                    st.session_state.local_sigungu_error = message
-                    st.session_state.local_selected_sigungu = ""
-                    st.session_state.local_selected_sigungu_code = ""
-                    st.session_state.pop("local_sigungu_fallback_select", None)
-                    st.session_state.local_sigungu_last_click_count = 0
-                    _reset_local_region_data()
-                    st.rerun()
-            if st.session_state.get("local_sigungu_error"):
-                st.warning(st.session_state.local_sigungu_error)
-            geo = st.session_state.get("local_sigungu_geo")
-            if geo:
-                if geo.get("_truncated_notice"):
-                    st.warning(geo["_truncated_notice"])
-                map_object = build_admin_map(geo, 9)
-                map_result = st_folium(
-                    map_object, height=570, use_container_width=True,
-                    returned_objects=["last_active_drawing", "last_object_clicked_tooltip", "last_object_clicked_count"],
-                    key=f"local_sigungu_map_{selected_sido_code}",
-                ) or {}
-                sigungu_features = geo.get("features", [])
-                name_fields = ("sig_kor_nm", "SIG_KOR_NM", "name", "NAME")
-                click_count = map_result.get("last_object_clicked_count") or 0
-                previous_click_count = st.session_state.get("local_sigungu_last_click_count", 0)
-                new_map_click = click_count != previous_click_count
-                if new_map_click:
-                    st.session_state.local_sigungu_last_click_count = click_count
-                drawing = map_result.get("last_active_drawing") if new_map_click else None
-                clicked_feature = drawing if isinstance(drawing, dict) and drawing.get("properties") else None
-                if new_map_click and clicked_feature is None:
-                    clicked_feature = _selected_feature_by_tooltip(
-                        sigungu_features, map_result.get("last_object_clicked_tooltip"), name_fields
-                    )
-                if clicked_feature:
-                    props = clicked_feature.get("properties", {}) or {}
-                    selected = region_property({"properties": props}, name_fields)
-                    selected_code = region_code({"properties": props}, ("sig_cd", "SIG_CD"))
-                    if selected != "이름 정보 없음" and selected != st.session_state.get("local_selected_sigungu"):
-                        st.session_state.local_selected_sigungu = selected
-                        st.session_state.local_selected_sigungu_code = selected_code
-                        st.session_state.local_sigungu_fallback_select = selected
-                        _reset_local_region_data()
 
-                sigungu_names = [region_property(feature, name_fields) for feature in sigungu_features]
-                sigungu_names = [name for name in sigungu_names if name != "이름 정보 없음"]
-                if sigungu_names:
-                    current = st.session_state.get("local_selected_sigungu", "")
-                    sigungu_options = ["선택하세요"] + sigungu_names
-                    default_index = sigungu_options.index(current) if current in sigungu_names else 0
-                    if current in sigungu_names and st.session_state.get("local_sigungu_fallback_select") != current:
-                        st.session_state.local_sigungu_fallback_select = current
-                    chosen = st.selectbox(
-                        "지도에서 선택하지 못했거나 목록으로 선택하려면 시·군·구를 고르세요.",
-                        sigungu_options, index=default_index, key="local_sigungu_fallback_select",
-                    )
-                    if chosen and chosen != "선택하세요" and chosen != st.session_state.get("local_selected_sigungu"):
-                        feature = next((f for f in sigungu_features if region_property(f, name_fields) == chosen), {})
-                        st.session_state.local_selected_sigungu = chosen
-                        st.session_state.local_selected_sigungu_code = region_code(feature, ("sig_cd", "SIG_CD"))
-                        _reset_local_region_data()
-                        st.rerun()
-                if st.session_state.get("local_selected_sigungu"):
-                    st.success(f"선택한 기초자치단체: {st.session_state.local_selected_sigungu}")
+def _ring_area_km2(ring):
+    """GeoJSON 경위도 ring의 구면 면적을 계산합니다(법정 면적이 아닌 경계 기반 계산값)."""
+    if not isinstance(ring, list) or len(ring) < 4:
+        return 0.0
+    radius_m = 6371008.8
+    total = 0.0
+    try:
+        for first, second in zip(ring, ring[1:]):
+            lon1, lat1 = float(first[0]), float(first[1])
+            lon2, lat2 = float(second[0]), float(second[1])
+            total += (math.radians(lon2 - lon1) *
+                      (2 + math.sin(math.radians(lat1)) + math.sin(math.radians(lat2))))
+        return abs(total * radius_m * radius_m / 2.0) / 1_000_000.0
+    except (TypeError, ValueError, IndexError):
+        return 0.0
 
-    selected_region = (
-        st.session_state.get("local_selected_sigungu")
-        if level == "기초자치단체"
-        else st.session_state.get("local_selected_sido")
+
+def geojson_area_km2(feature):
+    """Polygon/MultiPolygon 외곽링에서 내부 hole을 빼 경계 면적을 계산합니다."""
+    if not isinstance(feature, dict):
+        return None
+    geometry = feature.get("geometry") or {}
+    gtype, coords = geometry.get("type"), geometry.get("coordinates")
+    if not isinstance(coords, list):
+        return None
+    polygons = [coords] if gtype == "Polygon" else coords if gtype == "MultiPolygon" else []
+    if not polygons:
+        return None
+    total = 0.0
+    for polygon in polygons:
+        if not isinstance(polygon, list) or not polygon:
+            continue
+        outer = _ring_area_km2(polygon[0])
+        holes = sum(_ring_area_km2(ring) for ring in polygon[1:])
+        total += max(0.0, outer - holes)
+    return total if total > 0 else None
+
+
+def _numeric_value(value):
+    if value is None:
+        return None
+    text = re.sub(r"[,\s]", "", str(value))
+    try:
+        number = float(text)
+        return number if math.isfinite(number) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def population_summary(rows):
+    """행정동·통반 원자료에서 하나의 집계행만 확인될 때만 총인구 요약값을 반환합니다."""
+    if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
+        return None
+    row = rows[0]
+    patterns = ("총인구수", "총인구", "totpop", "totalpopulation", "total_pop", "popltncnt")
+    for key, value in row.items():
+        normalized = re.sub(r"[^0-9a-z가-힣]", "", str(key).lower())
+        if any(pattern in normalized for pattern in patterns):
+            number = _numeric_value(value)
+            if number is not None:
+                return int(number) if number.is_integer() else number
+    return None
+
+
+def _metric_card(name, value, unit, basis):
+    has_value = value not in (None, "")
+    value_text = str(value) if has_value else "자료 연결 대기"
+    unit_text = f" {unit.strip()}" if has_value and unit else ""
+    meta_parts = [basis]
+    if unit:
+        meta_parts.append(f"단위: {unit.strip()}")
+    html_block = (
+        '<div class="region-metric">'
+        f'<div class="metric-name">{html.escape(name)}</div>'
+        f'<div class="metric-value">{html.escape(value_text + unit_text)}</div>'
+        f'<div class="metric-meta">{html.escape(" · ".join(meta_parts))}</div>'
+        '</div>'
     )
-    if selected_region:
-        st.divider()
-        render_section(f"{selected_region} 지역 정보")
-        st.caption("선택 지역 이름과 지도 경계는 연결되지만, 주민등록 API 행정기관코드는 별도 공식 코드입니다. 두 코드 체계가 확인된 뒤 입력해야 정확한 통계가 조회됩니다.")
-        admin_code = st.text_input(
-            "주민등록 인구 API 행정기관코드 (필수)", key="local_population_admin_code",
-            placeholder="공식 행정기관코드 입력",
-        ).strip()
+    st.markdown(html_block, unsafe_allow_html=True)
+
+
+KOSIS_METRIC_RULES = {
+    "출생아 수": {"metric_key": "births", "keywords": ("출생아수",), "unit_kind": "count"},
+    "합계출산율": {"metric_key": "fertility", "keywords": ("합계출산율",), "unit_kind": "rate_count"},
+    "고령인구 비율": {"metric_key": "elderly_share", "keywords": ("고령인구비율", "65세이상인구비율"), "unit_kind": "percent"},
+    "청년인구 비율": {"metric_key": "youth_share", "keywords": ("청년인구비율",), "unit_kind": "percent", "requires_age_19_34": True},
+}
+
+
+def _kosis_normalized_text(value):
+    return re.sub(r"[^0-9a-z가-힣]", "", str(value or "").lower())
+
+
+def _region_aliases(region_name: str):
+    aliases = {str(region_name).strip()}
+    provincial = {
+        "서울특별시": ("서울",), "부산광역시": ("부산",), "대구광역시": ("대구",),
+        "인천광역시": ("인천",), "광주광역시": ("광주",), "대전광역시": ("대전",),
+        "울산광역시": ("울산",), "세종특별자치시": ("세종",), "경기도": ("경기",),
+        "강원특별자치도": ("강원", "강원도"), "충청북도": ("충북",), "충청남도": ("충남",),
+        "전북특별자치도": ("전북", "전라북도"), "전라남도": ("전남",),
+        "경상북도": ("경북",), "경상남도": ("경남",), "제주특별자치도": ("제주",),
+    }
+    aliases.update(provincial.get(str(region_name).strip(), ()))
+    return {_kosis_normalized_text(value) for value in aliases if value}
+
+
+def _parse_kosis_numeric(value):
+    """KOSIS 수치에서 쉼표와 표시 단위만 제거하고, 숫자가 아니면 None을 반환합니다."""
+    raw = str(value or "").strip().replace(",", "")
+    raw = raw.replace("%", "").replace("명", "").strip()
+    if not re.fullmatch(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)", raw):
+        return None
+    try:
+        number = float(raw)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def extract_kosis_region_metric(rows, metric_label: str, region_name: str):
+    """KOSIS 원자료가 지표명·단위·지역·기준시점을 모두 확인할 때만 카드에 연결합니다."""
+    rule = KOSIS_METRIC_RULES.get(metric_label)
+    if not rule:
+        return None, "지역 통계 카드에 연결할 지표를 선택하지 않았습니다. 원자료 표만 표시합니다."
+    if not isinstance(rows, list) or not rows:
+        return None, "KOSIS 응답에 자료 행이 없어 지역 통계 카드에 연결하지 않았습니다."
+
+    aliases = _region_aliases(region_name)
+    candidates = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        item_name = first_field(row, ("ITM_NM", "itmNm", "ITEM_NM", "항목명"), "")
+        table_name = first_field(row, ("TBL_NM", "tblNm", "통계표명"), "")
+        combined_name = _kosis_normalized_text(f"{table_name} {item_name}")
+        if not any(keyword in combined_name for keyword in rule["keywords"]):
+            continue
+
+        unit = first_field(row, ("UNIT_NM", "unitNm", "단위명"), "")
+        unit_text = _kosis_normalized_text(unit)
+        if rule["unit_kind"] in ("count", "rate_count") and ("명" not in unit_text or "%" in unit):
+            continue
+        if rule["unit_kind"] == "percent" and not ("%" in unit or "퍼센트" in unit_text):
+            continue
+
+        if rule.get("requires_age_19_34"):
+            # 청년기본법의 19~34세 기준이 원자료 명칭에서 확인되지 않으면 같은 지표로 간주하지 않습니다.
+            age_text = f"{table_name} {item_name} {first_field(row, ('CMMT_DC', '주석'), '')}"
+            compact_age = re.sub(r"\s+", "", age_text)
+            if not any(token in compact_age for token in ("19~34", "19∼34", "19-34", "19세~34세", "19세부터34세")):
+                continue
+
+        # KOSIS의 분류명(C1_NM~C8_NM) 중 선택 지역을 명시하는 행만 채택합니다.
+        location_values = []
+        for index in range(1, 9):
+            value = first_field(row, (f"C{index}_NM", f"c{index}Nm"), "")
+            if value:
+                location_values.append(value)
+        matched_location = next((value for value in location_values if _kosis_normalized_text(value) in aliases), "")
+        if not matched_location:
+            continue
+
+        period = first_field(row, ("PRD_DE", "prdDe", "수록시점"), "")
+        if not re.fullmatch(r"\d{4,8}", period):
+            continue
+        value = first_field(row, ("DT", "dt", "수치값"), "")
+        number = _parse_kosis_numeric(value)
+        if number is None:
+            continue
+        candidates.append({
+            "value": number,
+            "display_value": f"{number:,.0f}" if rule["unit_kind"] == "count" else f"{number:,.2f}".rstrip("0").rstrip("."),
+            "period": period,
+            "raw_unit": unit,
+            "table_name": table_name,
+            "item_name": item_name,
+            "region_label": matched_location,
+        })
+
+    if not candidates:
+        return None, (
+            f"응답에서 {region_name}에 해당하는 '{metric_label}' 자료를 확인하지 못했습니다. "
+            "통계표·항목·지역 분류값·단위를 확인하고 원자료 표를 참고해 주세요."
+        )
+    latest_period = max(item["period"] for item in candidates)
+    latest = [item for item in candidates if item["period"] == latest_period]
+    if len(latest) != 1:
+        return None, (
+            f"가장 최근 기준시점({latest_period})에 같은 지역의 자료가 여러 행 반환되어 "
+            "성별·세부 분류 등을 임의 합산하지 않았습니다. 분류 조건을 더 좁혀 주세요."
+        )
+    return latest[0], ""
+
+
+def render_region_statistics(region_name: str, feature=None, level="기초자치단체", parent=False):
+    """시안의 7개 항목을 고정 순서로 보여주며 지역별 조회 결과를 분리합니다."""
+    region_data = _region_data_cache(level, region_name)
+    rows = region_data.get("population_rows", [])
+    area = geojson_area_km2(feature) if feature else None
+    population = population_summary(rows)
+    density = population / area if population is not None and area else None
+    area_value = f"{area:,.1f}" if area is not None else None
+    pop_value = f"{population:,}" if isinstance(population, int) else f"{population:,.1f}" if population is not None else None
+    density_value = f"{density:,.0f}" if density is not None else None
+
+    st.markdown("### 지역 기본 정보")
+    st.caption(f"{region_name} · {level} · 지표별 기준월·기준연도를 구분해 표시합니다.")
+    population_month = region_data.get("population_month", "")
+    population_basis = f"행정안전부 · 기준월 {population_month}" if population_month else "행정안전부 · 기준월 표시"
+    kosis_metrics = region_data.get("kosis_metric_values", {})
+    births = kosis_metrics.get("births", {})
+    fertility = kosis_metrics.get("fertility", {})
+    elderly = kosis_metrics.get("elderly_share", {})
+    youth = kosis_metrics.get("youth_share", {})
+    metric_defs = [
+        ("면적", area_value, "km²", "VWorld 경계 기반 참고 계산값 · 공표 면적 아님"),
+        ("주민등록인구", pop_value, "명", population_basis),
+        ("인구밀도", density_value, "명/km²", "확인된 주민등록인구 ÷ 경계 기반 면적"),
+        ("출생아 수", births.get("display_value"), "명", f"KOSIS · 기준시점 {births.get('period', '자료 연결 대기')}"),
+        ("합계출산율", fertility.get("display_value"), "명/가임여성 1명", f"KOSIS · 가임기간(15~49세) 기준 · 기준시점 {fertility.get('period', '자료 연결 대기')}"),
+        ("고령인구 비율", elderly.get("display_value"), "%", f"KOSIS · 65세 이상 기준 · 기준시점 {elderly.get('period', '자료 연결 대기')}"),
+        ("청년인구 비율", youth.get("display_value"), "%", f"KOSIS · 19~34세 기준 확인 · 기준시점 {youth.get('period', '자료 연결 대기')}"),
+    ]
+    cols = st.columns(3, gap="small")
+    for idx, (name, value, unit, basis) in enumerate(metric_defs):
+        with cols[idx % 3]:
+            _metric_card(name, value, unit, basis)
+    if rows and population is None:
+        st.caption("인구 원자료가 여러 행이거나 집계 필드를 확인할 수 없어 총인구를 임의 합산하지 않았습니다. 아래 원자료를 확인하세요.")
+    st.caption("면적은 행정구역 경계의 경위도 좌표로 계산한 참고값이며, 공표된 법정·통계 면적을 대체하지 않습니다. 통계가 연결되지 않은 지표는 숫자를 추정하지 않습니다.")
+
+
+def _region_data_tools(region_name: str, level: str, feature=None):
+    """지역별 통계를 수집합니다. 광역·기초 자료를 별도 저장하고 원자료를 함께 표시합니다."""
+    cache = _region_data_cache(level, region_name)
+    token = _region_widget_token(level, region_name)
+    auto_admin_code = population_admin_code_from_feature(feature)
+    vworld_code = region_code(feature or {}, (
+        "ctprvn_cd", "CTPRVN_CD", "sig_cd", "SIG_CD", "emd_cd", "EMD_CD",
+    )) if feature else ""
+
+    with st.expander("지역 통계 원자료 조회 및 기준 설정", expanded=False):
+        st.markdown("**주민등록인구·세대현황**")
+        st.caption("행정안전부 API는 통계년월과 행정기관코드를 기준으로 자료를 제공합니다. VWorld의 법정구역 코드와 주민등록 행정기관코드는 동일하다고 가정하지 않습니다.")
+        if vworld_code:
+            st.caption(f"지도에서 확인한 VWorld 행정구역 코드: {vworld_code}")
+        if auto_admin_code:
+            st.caption("지도 응답에 주민등록 행정기관코드가 명시되어 있어 자동 입력했습니다.")
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("주민등록 인구·세대 자료 조회", use_container_width=True):
-                month = korea_now().strftime("%Y%m")
-                rows, message = data_go_call("population", {"statsYm": month, "admCd": admin_code})
-                st.session_state.local_population_rows = rows
-                st.session_state.local_population_error = message
-            if st.session_state.get("local_population_error"):
-                st.warning(st.session_state.local_population_error)
-            if st.session_state.get("local_population_rows"):
-                st.caption("이 API는 통·반 단위까지 제공할 수 있으므로, 반환된 행을 지역 전체 인구로 오인하거나 단순 합산하지 마세요.")
-                table_view(st.session_state.local_population_rows, 100)
+            month = st.text_input(
+                "통계년월 (YYYYMM)", value=cache.get("population_month", korea_now().strftime("%Y%m")),
+                key=f"local_month_{token}",
+            )
         with c2:
-            st.caption("기수별·유형별 지방의회 의원 정수 통계이며, 선택 지역의 현재 의석 수와 일대일로 대응하지 않습니다.")
-            if st.button("지방의회 의원 정수 자료 조회", use_container_width=True):
-                rows, message = data_go_call("council", {})
-                st.session_state.local_council_rows = rows
-                st.session_state.local_council_error = message
-            if st.session_state.get("local_council_error"):
-                st.warning(st.session_state.local_council_error)
-            if st.session_state.get("local_council_rows"):
-                table_view(st.session_state.local_council_rows, 100)
-        st.markdown("**지역 사회 통계**")
-        st.caption("출생률·인구구성 등의 지표는 KOSIS에서 통계표 ID와 분류값을 지정해 조회합니다. 통계표별 기준연도와 산출 단위를 함께 확인해야 합니다.")
-        if st.button("KOSIS 통계 탐색 화면으로 이동"):
-            st.session_state.page = "정치 자료 탐색"
-            st.session_state.api_selected_item = "kosis"
+            admin_code = st.text_input(
+                "주민등록 행정기관코드", value=cache.get("population_admin_code", auto_admin_code),
+                key=f"local_population_admin_{token}", placeholder="공식 행정기관코드",
+                help="VWorld 코드와 별도일 수 있습니다. 공식 행정기관코드를 확인한 뒤 입력하세요.",
+            )
+        if st.button("주민등록 원자료 조회", key=f"local_population_fetch_{token}", type="primary"):
+            rows, message = data_go_call("population", {"statsYm": month.strip(), "admCd": admin_code.strip()})
+            _save_region_data_cache(
+                level, region_name,
+                population_rows=rows, population_error=message,
+                population_month=month.strip(), population_admin_code=admin_code.strip(),
+            )
+            cache = _region_data_cache(level, region_name)
+        if cache.get("population_error"):
+            st.warning(cache["population_error"])
+        if cache.get("population_rows"):
+            st.caption(f"{region_name} · 기준월 {cache.get('population_month', '확인 필요')} · 원자료")
+            table_view(cache["population_rows"], 100)
+
+        st.divider()
+        st.markdown("**지방의회의원 정수 통계**")
+        st.caption("기수별·유형별 전국 통계입니다. 특정 기초자치단체의 현재 의석 수로 단정하지 않고 지역 정보의 참고자료로 표시합니다.")
+        if st.button("지방의회 정수 원자료 조회", key=f"local_council_fetch_{token}"):
+            rows, message = data_go_call("council", {})
+            _save_region_data_cache(level, region_name, council_rows=rows, council_error=message)
+            cache = _region_data_cache(level, region_name)
+        if cache.get("council_error"):
+            st.warning(cache["council_error"])
+        if cache.get("council_rows"):
+            table_view(cache["council_rows"], 100)
+
+        st.divider()
+        st.markdown("**KOSIS 지역통계 찾기 및 조회**")
+        st.caption("KOSIS e-지방지표에는 고령인구비율·청년인구비율·출생아수·합계출산율 등이 있습니다. 통계표마다 분류 코드가 다르므로 원자료의 표·항목·지역 코드를 확인한 뒤 조회합니다.")
+        list_col1, list_col2 = st.columns(2)
+        with list_col1:
+            view_code = st.selectbox(
+                "통계목록 유형",
+                ["MT_GTITLE01", "MT_GTITLE02", "MT_GTITLE03", "MT_ATITLE01", "MT_ATITLE02"],
+                key=f"local_kosis_view_{token}",
+                format_func=lambda value: {
+                    "MT_GTITLE01": "e-지방지표 · 주제별",
+                    "MT_GTITLE02": "e-지방지표 · 지역별",
+                    "MT_GTITLE03": "e-지방지표 · 테마별",
+                    "MT_ATITLE01": "지역통계 · 주제별",
+                    "MT_ATITLE02": "지역통계 · 기관별",
+                }.get(value, value),
+            )
+        with list_col2:
+            parent_id = st.text_input("목록 ID (첫 조회는 A)", value="A", key=f"local_kosis_parent_{token}")
+        if st.button("KOSIS 통계표 목록 불러오기", key=f"local_kosis_list_fetch_{token}"):
+            rows, message = kosis_list_call(parent_id, view_code)
+            _save_region_data_cache(level, region_name, kosis_list_rows=rows, kosis_list_error=message)
+            cache = _region_data_cache(level, region_name)
+        if cache.get("kosis_list_error"):
+            st.warning(cache["kosis_list_error"])
+        if cache.get("kosis_list_rows"):
+            table_view(cache["kosis_list_rows"], 100)
+            st.caption("목록의 TBL_ID·ORG_ID와 통계표 설명을 확인한 뒤 아래 조회 항목을 입력하세요.")
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            org_id = st.text_input("기관 ID (orgId)", key=f"local_kosis_org_{token}")
+        with c2:
+            table_id = st.text_input("통계표 ID (tblId)", key=f"local_kosis_table_{token}")
+        with c3:
+            item_id = st.text_input("항목 ID (itmId)", value="ALL", key=f"local_kosis_item_{token}")
+        c4, c5 = st.columns(2)
+        with c4:
+            region_code_input = st.text_input(
+                "지역 분류값 (objL1)", key=f"local_kosis_region_{token}",
+                help="KOSIS 통계표별 메타자료에서 선택 지역에 대응하는 분류값을 확인해야 합니다.",
+            )
+        with c5:
+            period = st.selectbox("수록주기", ["Y", "S", "Q", "M", "D"], key=f"local_kosis_period_{token}")
+        period_help = {"D": "YYYYMMDD", "M": "YYYYMM", "Q": "YYYY01~YYYY04", "S": "YYYY01~YYYY02", "Y": "YYYY"}[period]
+        c6, c7 = st.columns(2)
+        with c6:
+            start_period = st.text_input("시작 시점 (선택)", key=f"local_kosis_start_{token}", help=period_help)
+        with c7:
+            end_period = st.text_input("종료 시점 (선택)", key=f"local_kosis_end_{token}", help=period_help)
+        metric_target = st.selectbox(
+            "원자료를 지역 통계 카드에 연결",
+            ["원자료 표만 조회", "출생아 수", "합계출산율", "고령인구 비율", "청년인구 비율"],
+            key=f"local_kosis_metric_target_{token}",
+            help="선택한 지표의 이름·단위·지역 분류명·기준시점이 원자료에서 확인될 때만 위 통계 카드에 반영합니다.",
+        )
+        if st.button("KOSIS 지역통계 원자료 조회", key=f"local_kosis_fetch_{token}"):
+            rows, message = kosis_data_call(org_id, table_id, item_id, region_code_input, period, start_period, end_period)
+            updates = {"kosis_rows": rows, "kosis_error": message, "kosis_metric_error": ""}
+            if rows and not message and metric_target != "원자료 표만 조회":
+                metric_value, metric_message = extract_kosis_region_metric(rows, metric_target, region_name)
+                updates["kosis_metric_error"] = metric_message
+                if metric_value:
+                    metric_values = dict(cache.get("kosis_metric_values", {}))
+                    metric_key = KOSIS_METRIC_RULES[metric_target]["metric_key"]
+                    metric_values[metric_key] = metric_value
+                    updates["kosis_metric_values"] = metric_values
+            _save_region_data_cache(level, region_name, **updates)
             st.rerun()
+        if cache.get("kosis_error"):
+            st.warning(cache["kosis_error"])
+        if cache.get("kosis_metric_error"):
+            st.info(cache["kosis_metric_error"])
+        if cache.get("kosis_rows"):
+            table_view(cache["kosis_rows"], 100)
+        st.link_button("KOSIS e-지방지표에서 지표 정의·기준연도 확인", "https://kosis.kr/visual/eRegionIndex/eRegionTheme.do")
+
+
+def _render_local_map(geo, level, map_key, zoom):
+    """지도 렌더링과 클릭된 행정구역의 이름을 반환합니다."""
+    if not HAS_MAP or not geo or not geo.get("features"):
+        return None, ""
+    map_object = build_admin_map(geo, zoom)
+    result = st_folium(
+        map_object, height=520, use_container_width=True,
+        returned_objects=["last_object_clicked_tooltip", "last_object_clicked_count", "last_active_drawing"],
+        key=map_key,
+    ) or {}
+    fields = (
+        ("ctp_kor_nm", "CTP_KOR_NM", "sido_nm", "name", "NAME")
+        if level == "시도" else
+        ("sig_kor_nm", "SIG_KOR_NM", "sig_nm", "sigungu_nm", "name", "NAME")
+    )
+    features = geo.get("features", [])
+    click_count = result.get("last_object_clicked_count") or 0
+    counter_key = f"{map_key}_last_click"
+    previous = st.session_state.get(counter_key, 0)
+    clicked = None
+    if click_count != previous:
+        st.session_state[counter_key] = click_count
+        drawing = result.get("last_active_drawing")
+        if isinstance(drawing, dict) and drawing.get("properties"):
+            clicked = drawing
+        else:
+            clicked = _selected_feature_by_tooltip(features, result.get("last_object_clicked_tooltip"), fields)
+    if clicked:
+        return region_property(clicked, fields), clicked
+    return None, None
+
+
+def render_local_government():
+    """전국 지도 → 광역자치단체 → 시군구 화면으로 이동합니다."""
+    render_hero("지방 정부", "대한민국 지도에서 광역자치단체를 선택한 뒤 해당 지역의 기초자치단체를 살펴봅니다.")
+    st.caption("지도에서 지역을 선택하면 다음 화면으로 이동합니다. 지도 연결에 실패하면 지역 목록으로 선택할 수 있습니다.")
+    geo, message = _ensure_local_map("시도")
+    if message:
+        st.warning(message)
+    if geo and HAS_MAP:
+        if geo.get("_truncated_notice"):
+            st.warning(geo["_truncated_notice"])
+        selected, feature = _render_local_map(geo, "시도", "local_sido_map_final", 7)
+        if selected:
+            _select_sido(selected, feature)
+            st.rerun()
+        names = [region_property(f, ("ctp_kor_nm", "CTP_KOR_NM", "sido_nm", "name", "NAME")) for f in geo.get("features", [])]
+        names = [name for name in names if name != "이름 정보 없음"]
+        if names:
+            choice = st.selectbox("지도에서 선택하기 어려우면 시·도를 목록에서 선택하세요.", ["선택하세요"] + names, key="final_sido_choice")
+            if choice != "선택하세요" and st.button("선택한 광역자치단체로 이동", key="final_sido_next", type="primary"):
+                feature = next((f for f in geo.get("features", []) if region_property(f, ("ctp_kor_nm", "CTP_KOR_NM", "sido_nm", "name", "NAME")) == choice), None)
+                _select_sido(choice, feature)
+                st.rerun()
+    else:
+        st.info("행정구역 지도 데이터를 사용할 수 없어 17개 광역자치단체 목록을 표시합니다.")
+        cols = st.columns(3)
+        for index, name in enumerate(KOREA_SIDO_FALLBACK):
+            with cols[index % 3]:
+                if st.button(name, key=f"fallback_sido_{index}", use_container_width=True):
+                    _select_sido(name, None)
+                    st.rerun()
+
+
+def render_local_sigungu():
+    """선택한 광역자치단체의 시군구 경계 지도와 광역 통계를 함께 표시합니다."""
+    sido = st.session_state.get("local_selected_sido", "")
+    if not sido:
+        st.warning("먼저 광역자치단체를 선택해 주세요.")
+        if st.button("전국 지도 보기"):
+            st.session_state.page = "지방 정부"
+            st.rerun()
+        return
+    top_left, top_right = st.columns([4, 1])
+    with top_left:
+        render_hero(sido, f"{sido}의 기초자치단체를 선택하세요.")
+    with top_right:
+        if st.button("← 전국 지도", use_container_width=True):
+            _change_local_sido()
+            st.rerun()
+
+    geo, message = _ensure_local_map("시군구")
+    if message:
+        st.warning(message)
+    if geo and HAS_MAP:
+        if geo.get("_truncated_notice"):
+            st.warning(geo["_truncated_notice"])
+        selected, feature = _render_local_map(geo, "시군구", f"local_sigungu_map_final_{st.session_state.get('local_selected_sido_code', 'none')}", 9)
+        if selected:
+            _select_sigungu(selected, feature)
+            st.rerun()
+        fields = ("sig_kor_nm", "SIG_KOR_NM", "sig_nm", "sigungu_nm", "name", "NAME")
+        names = [region_property(f, fields) for f in geo.get("features", [])]
+        names = [name for name in names if name != "이름 정보 없음"]
+        if names:
+            choice = st.selectbox("지도에서 선택하기 어려우면 시·군·구를 목록에서 선택하세요.", ["선택하세요"] + names, key=f"final_sigungu_choice_{st.session_state.get('local_selected_sido_code', 'none')}")
+            if choice != "선택하세요" and st.button("선택한 기초자치단체 상세 보기", key="final_sigungu_next", type="primary"):
+                feature = next((f for f in geo.get("features", []) if region_property(f, fields) == choice), None)
+                _select_sigungu(choice, feature)
+                st.rerun()
+    else:
+        st.info("시·군·구 경계 데이터를 불러오지 못했습니다. 통계·지도 대신 지역명을 직접 선택해 일반 조직도 예시를 볼 수 있습니다.")
+        manual_name = st.text_input("기초자치단체 이름", placeholder="예: 수원시")
+        if st.button("입력한 지역 상세 보기", disabled=not manual_name.strip(), type="primary"):
+            _select_sigungu(manual_name.strip(), None)
+            st.rerun()
+
+    st.divider()
+    st.markdown(f"### {sido} 광역자치단체 기본 정보")
+    render_region_statistics(sido, st.session_state.get("local_sido_feature"), "광역자치단체", parent=True)
+    _region_data_tools(sido, "광역자치단체", st.session_state.get("local_sido_feature"))
+    st.caption("위 통계는 선택한 광역자치단체 기준입니다. 아래 지도에서 기초자치단체를 선택하면 별도 상세 화면으로 이동합니다.")
+
+
+def render_local_detail():
+    sido = st.session_state.get("local_selected_sido", "")
+    sigungu = st.session_state.get("local_selected_sigungu", "")
+    if not sigungu:
+        st.warning("선택된 기초자치단체가 없습니다.")
+        if st.button("지역 선택 화면으로 돌아가기"):
+            st.session_state.page = "지방정부 시군구"
+            st.rerun()
+        return
+    if st.button("← 지역 선택", key="local_detail_back", use_container_width=False):
+        st.session_state.page = "지방정부 시군구"
+        st.rerun()
+
+    with st.container(border=True):
+        title_col, badge_col = st.columns([4, 1])
+        with title_col:
+            st.markdown(f"### {sigungu}")
+        with badge_col:
+            st.markdown("<div style='text-align:right'><span style='background:var(--secondary-background-color);padding:4px 9px;border-radius:20px'>기초자치단체</span></div>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align:center;font-weight:800;font-size:1.05rem'>지역 기본 정보</div>", unsafe_allow_html=True)
+        st.caption("면적 · 주민등록인구 · 인구밀도 · 출생아 수 · 합계출산율 · 고령인구 · 청년인구")
+        render_region_statistics(sigungu, st.session_state.get("local_sigungu_feature"), "기초자치단체")
+        st.divider()
+        left, right = st.columns(2, gap="small")
+        with left:
+            st.markdown("### 지방 행정부")
+            render_node("시장·군수·구청장", "지방자치단체의 장 · 집행기관", "local_mayor", "local_executive", "지방정부 상세", "🏢")
+            st.markdown('<div class="org-arrow">↓</div>', unsafe_allow_html=True)
+            render_node("부단체장", "부시장·부군수·부구청장 등", "local_deputy", "local_executive", "지방정부 상세")
+            st.markdown('<div class="org-arrow">↓</div>', unsafe_allow_html=True)
+            render_node("실·국·본부", "정책 분야별 행정조직", "local_bureaus", "local_executive", "지방정부 상세")
+            st.caption("과·담당관 등 하부조직은 지자체별 직제에 따라 달라집니다.")
+        with right:
+            st.markdown("### 지방 의회")
+            render_node("시·군·구의회", "지역 주민 대표 · 의결기관", "local_council_root", "local_council", "지방정부 상세", "🏛️")
+            st.markdown('<div class="org-arrow">↓</div>', unsafe_allow_html=True)
+            render_node("의장단·상임위원회", "의장·부의장 · 소관 분야 심사", "local_committee", "local_council", "지방정부 상세")
+            st.markdown('<div class="org-arrow">↓</div>', unsafe_allow_html=True)
+            render_node("의회사무국·사무과", "의정활동 및 의회 운영 지원", "local_council_office", "local_council", "지방정부 상세")
+            st.caption("실제 위원회·사무조직 편제는 지역별로 다릅니다.")
+        st.caption(f"{sigungu}의 실제 조직도를 그대로 복제한 것이 아니라, 지방 행정부와 지방 의회를 구분해 보여 주는 일반 구조 예시입니다.")
+
+    st.divider()
+    _region_data_tools(sigungu, "기초자치단체", st.session_state.get("local_sigungu_feature"))
+    st.link_button("지방자치·행정안전부 공식 자료", "https://www.mois.go.kr/")
 
 
 # ============================================================
 # 16. 앱 사이드바 / 라우팅
 # ============================================================
+
+
+
+def _reset_local_navigation():
+    """지방정부 메뉴를 새로 열 때 이전 지역 선택·조회 결과를 초기화합니다."""
+    st.session_state.local_stage = "sido"
+    st.session_state.local_sido_attempted = False
+    st.session_state.local_sido_geo = None
+    st.session_state.local_selected_sido = ""
+    st.session_state.local_selected_sigungu = ""
+    st.session_state.local_selected_sido_code = ""
+    st.session_state.local_selected_sigungu_code = ""
+    st.session_state.local_sido_feature = None
+    st.session_state.local_sigungu_feature = None
+    st.session_state.local_sigungu_geo = None
+    st.session_state.local_sigungu_attempted = False
+    st.session_state.local_region_data_cache = {}
+    _reset_local_region_data()
+
+
+def render_study_hub():
+    """확정 시안의 2×2 공부하기 선택 화면."""
+    render_hero("공부하기", "대한민국의 국가기관과 지방자치단체 알아보기")
+    study_cards = [
+        ("정부 조직", "🏛️", "행정부의 구성과 중앙행정기관의 역할", "정부 조직"),
+        ("국회 조직", "▥", "입법부의 구성과 위원회·국회 지원기관", "국회 조직"),
+        ("법원 조직", "⚖️", "사법부의 구성과 법원 체계", "법원 조직"),
+        ("지방 정부", "🗺️", "지방 행정부와 지방의회·지역 통계", "지방 정부"),
+    ]
+    cols = st.columns(2, gap="small")
+    for index, (title, icon, description, page_name) in enumerate(study_cards):
+        with cols[index % 2]:
+            with st.container(border=True):
+                st.markdown(
+                    f"<div style='text-align:center;font-size:2rem;line-height:1.4'>{icon}</div>"
+                    f"<div style='text-align:center;font-weight:800;font-size:1.08rem;margin:.25rem 0'>{html.escape(title)}</div>"
+                    f"<div style='text-align:center;color:var(--secondary-text-color);font-size:.88rem;min-height:2.7rem'>{html.escape(description)}</div>",
+                    unsafe_allow_html=True,
+                )
+                if st.button(f"{title} 살펴보기", key=f"study_hub_{index}", use_container_width=True, type="secondary"):
+                    st.session_state.page = page_name
+                    st.session_state.org_detail = ""
+                    if page_name == "지방 정부":
+                        _reset_local_navigation()
+                    st.rerun()
+
 
 def render_sidebar():
     st.markdown("### 메뉴")
@@ -2455,21 +3403,26 @@ def render_sidebar():
             st.rerun()
 
     st.divider()
-    st.markdown("### 공부하기")
+    if st.button("⌂  공부하기", key="nav_study_hub", use_container_width=True):
+        st.session_state.page = "공부하기"
+        st.session_state.org_detail = ""
+        st.rerun()
     study_items = [
         ("정부 조직", "♧  정부 조직"),
         ("국회 조직", "🏛️  국회 조직"),
         ("법원 조직", "⚖️  법원 조직"),
         ("지방 정부", "🗺️  지방정부"),
-        ("정보 확인 가이드", "☑  정보 확인 가이드"),
     ]
     for page_name, label in study_items:
         if st.button(label, key=f"nav_study_{page_name}", use_container_width=True):
             st.session_state.page = page_name
             if page_name == "지방 정부":
-                st.session_state.local_level = "광역자치단체"
+                _reset_local_navigation()
             st.session_state.org_detail = ""
             st.rerun()
+    if st.button("▣  정보 확인 가이드", key="nav_information_guide", use_container_width=True):
+        st.session_state.page = "정보 확인 가이드"
+        st.rerun()
 
     st.divider()
     st.button("☷  시뮬레이션 · 준비 중", disabled=True, use_container_width=True)
@@ -2519,6 +3472,8 @@ def main():
                 render_data_explorer()
             elif page == "정보 확인 가이드":
                 render_information_guide()
+            elif page == "공부하기":
+                render_study_hub()
             elif page == "정부 조직":
                 render_government()
             elif page == "국회 조직":
@@ -2527,6 +3482,10 @@ def main():
                 render_court()
             elif page == "지방 정부":
                 render_local_government()
+            elif page == "지방정부 시군구":
+                render_local_sigungu()
+            elif page == "지방정부 상세":
+                render_local_detail()
             elif page == "기관 상세":
                 render_hero("기관 상세", "조직도에서 선택한 기관의 역할과 기능을 확인합니다.")
                 render_org_detail()
