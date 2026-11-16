@@ -3,17 +3,21 @@
 정치 한 걸음
 Streamlit 메인 앱
 
-필수 저장소 파일
+저장소 파일
 - main.py
 - Quiz.txt
 - NEWS.txt
 - requirements.txt
+- README.md
+- 지역코드_연계표.xlsx (사용자 편집 가능한 지역·API 코드북)
+- secrets_example.toml (설정 참고용)
+- tests/test_core.py (개발 검수용)
 
 Streamlit Community Cloud > App settings > Secrets
 [API_KEYS]
-ASSEMBLY_MEMBER_KEY = "국회의원 정보 통합 API 전용 인증키"
-ASSEMBLY_VOTE_KEY = "국회의원 본회의 표결정보 전용 인증키"
-ASSEMBLY_SCHEDULE_KEY = "국회일정 통합 API 전용 인증키"
+ASSEMBLY_MEMBER_KEY = "열린국회정보 공통 인증키 (세 API 동일값)"
+ASSEMBLY_VOTE_KEY = "열린국회정보 공통 인증키 (세 API 동일값)"
+ASSEMBLY_SCHEDULE_KEY = "열린국회정보 공통 인증키 (세 API 동일값)"
 NEC_WINNER_KEY = "중앙선거관리위원회 당선인 정보 전용 인증키"
 NEC_CANDIDATE_KEY = "중앙선거관리위원회 후보자 통합검색 전용 인증키"
 MOIS_BENEFIT_KEY = "행정안전부 공공서비스 정보 전용 인증키"
@@ -31,17 +35,14 @@ VWORLD_DOMAIN = "https://실제-배포된-앱-주소"
 [API_URLS]
 ASSEMBLY_SCHEDULE = "국회일정 통합 API 상세 요청 주소"
 MOIS_COUNCIL_SEATS = "지방의회의원 정수 API 상세 요청 주소"
-MOIS_POPULATION = "행정동 인구 API 상세 요청 주소"
 
 [API_CODES]
 ASSEMBLY_SCHEDULE = "국회일정 통합 API 코드"
-CANDIDATE_NAME_PARAM = "후보자 이름 검색변수"
-MOIS_POPULATION_MONTH_PARAM = "통계년월 요청변수"
-MOIS_POPULATION_ADMIN_PARAM = "행정기관코드 요청변수"
 
 중요:
-- 총 12개 API는 각각 별도의 인증키를 사용합니다. 인증키를 합치거나 공통 키로 대체하지 않습니다.
-- 각 키는 API_KEYS 안의 해당 서비스 전용 이름에 개별 등록합니다.
+- API 서비스는 12개이며 Secrets 변수명도 12개입니다.
+- 국회사무처의 국회의원 정보·본회의 표결·국회일정 3개 API는 동일한 열린국회정보 키를 공유하므로 세 항목에 같은 값을 입력합니다.
+- 나머지 9개 API는 각각 해당 서비스에서 발급받은 키를 입력합니다.
 - 인증키는 이 코드나 GitHub 저장소에 넣지 않습니다.
 - 확인되지 않은 상세 요청 주소·요청변수는 임의로 만들어 호출하지 않습니다.
 - 정부디렉터리시스템 표준 API는 신청 대기 중이므로 현재 12개 목록에 포함하지 않습니다.
@@ -99,6 +100,7 @@ st.set_page_config(
 BASE_DIR = Path(__file__).resolve().parent
 QUIZ_PATH = BASE_DIR / "Quiz.txt"
 NEWS_PATH = BASE_DIR / "NEWS.txt"
+REGION_CODEBOOK_PATH = BASE_DIR / "지역코드_연계표.xlsx"
 KST = ZoneInfo("Asia/Seoul")
 
 def korea_now() -> datetime:
@@ -183,21 +185,41 @@ def _is_placeholder(value: str) -> bool:
     return any(marker in text for marker in markers)
 
 
+# 국회사무처의 세 API는 열린국회정보에서 발급한 하나의 인증키를 공유합니다.
+# Secrets 항목 이름은 세 개로 분리하되, 실제 값은 같은 키를 복사해 입력할 수 있습니다.
+SHARED_API_KEY_GROUPS = (
+    frozenset({"ASSEMBLY_MEMBER_KEY", "ASSEMBLY_VOTE_KEY", "ASSEMBLY_SCHEDULE_KEY"}),
+)
+
+
+def _api_keys_may_share_value(first_name: str, second_name: str) -> bool:
+    return any(first_name in group and second_name in group for group in SHARED_API_KEY_GROUPS)
+
+
 def api_key_status(key_name: str) -> str:
-    """API 키 값을 노출하지 않고 미등록·중복·등록됨 상태만 반환합니다."""
+    """키 값을 노출하지 않고 미등록·중복·등록됨 상태를 반환합니다.
+
+    국회사무처 세 API 사이의 동일 키는 정상입니다. 다른 API 그룹과의 중복은 계속 차단합니다.
+    """
     value = get_secret("API_KEYS", key_name)
     if _is_placeholder(value):
         return "미등록"
     known_names = globals().get("API_KEY_NAMES", {})
-    duplicate_names = [
-        other_name for other_name in known_names.values()
-        if other_name != key_name and get_secret("API_KEYS", other_name) == value
-    ]
+    duplicate_names = []
+    for other_name in known_names.values():
+        if other_name == key_name:
+            continue
+        other_value = get_secret("API_KEYS", other_name)
+        if not other_value or other_value != value:
+            continue
+        if _api_keys_may_share_value(key_name, other_name):
+            continue
+        duplicate_names.append(other_name)
     return "중복" if duplicate_names else "등록됨"
 
 
 def api_key(key_name: str) -> str:
-    """전용 키가 정상 등록된 경우에만 반환하며 중복 키는 사용하지 않습니다."""
+    """정상 등록된 키를 반환합니다. 국회사무처의 승인된 키 공유는 허용합니다."""
     if api_key_status(key_name) != "등록됨":
         return ""
     return get_secret("API_KEYS", key_name)
@@ -206,8 +228,9 @@ def api_key(key_name: str) -> str:
 def api_key_error_message(key_name: str) -> str:
     status = api_key_status(key_name)
     if status == "중복":
-        return f"Streamlit Secrets의 API_KEYS.{key_name} 값이 다른 API의 인증키와 중복됩니다. 12개 API에 각각 발급된 키를 따로 입력해 주세요."
-    return f"Streamlit Secrets의 API_KEYS.{key_name}에 해당 API 전용 인증키를 등록해 주세요."
+        return (f"Streamlit Secrets의 API_KEYS.{key_name} 값이 다른 API 서비스의 키와 중복됩니다. "
+                "국회사무처 세 API끼리만 같은 키를 사용할 수 있습니다.")
+    return f"Streamlit Secrets의 API_KEYS.{key_name}에 해당 API 인증키를 등록해 주세요."
 
 
 def api_key_is_configured(key_name: str) -> bool:
@@ -932,7 +955,7 @@ API_ITEMS = {
         "description": "후보자 이름을 기준으로 후보 이력과 기본 정보를 검색합니다.",
         "group": "선거", "key": "NEC_CANDIDATE_KEY",
         "url": "https://apis.data.go.kr/9760000/CndaSrchService/getCndaSrchInqire",
-        "status": "이름 검색 요청변수 확인 필요",
+        "status": "공식 이름 검색변수 name 반영",
         "source_url": "https://www.data.go.kr/data/15140045/openapi.do",
     },
     "benefit": {
@@ -971,8 +994,8 @@ API_ITEMS = {
         "title": "행정안전부 행정동별 주민등록 인구 및 세대현황", "short": "주민등록 인구",
         "description": "행정구역·통계년월별 인구와 세대 현황을 확인합니다.",
         "group": "지방행정", "key": "MOIS_POPULATION_KEY",
-        "url": "",
-        "status": "상세 요청 주소 확인 필요",
+        "url": "https://apis.data.go.kr/1741000/admmPpltnHhStus",
+        "status": "공식 요청주소·요청변수 연결 (조회 기간 최대 3개월)",
         "source_url": "https://www.data.go.kr/data/15108065/openapi.do",
     },
     "kosis": {
@@ -1037,8 +1060,93 @@ def open_assembly_call(item_id: str, extra=None):
     return call_api(item["title"], url, params)
 
 
+def _month_index(value: str):
+    """YYYYMM을 월 순번으로 바꾸며, 형식이 아니면 None을 반환합니다."""
+    value = str(value or "").strip()
+    if not re.fullmatch(r"\d{6}", value):
+        return None
+    year, month = int(value[:4]), int(value[4:])
+    if year < 1900 or not 1 <= month <= 12:
+        return None
+    return year * 12 + month - 1
+
+
+def build_mois_population_params(api_key_value: str, admin_code: str, start_month: str,
+                                 end_month: str | None = None, level="기초자치단체",
+                                 page_no=1, num_of_rows=100):
+    """행정안전부 주민등록 인구 API의 공식 요청변수를 구성합니다.
+
+    공식 파라미터: admmCd, srchFrYm, srchToYm, lv, regSeCd, type, numOfRows, pageNo.
+    조회 기간은 최대 3개월이며, 단일 월 조회는 시작·종료월에 같은 값을 넣습니다.
+    """
+    admin_code = str(admin_code or "").strip()
+    start_month = str(start_month or "").strip()
+    end_month = str(end_month or start_month).strip()
+    start_index = _month_index(start_month)
+    end_index = _month_index(end_month)
+    if start_index is None or end_index is None:
+        return None, "조회년월은 YYYYMM 형식이어야 하며 월은 01~12 범위여야 합니다."
+    if start_month < "202210" or end_month < "202210":
+        return None, "이 API는 2022년 10월 이후 자료를 조회할 수 있습니다."
+    if start_index > end_index:
+        return None, "조회 시작년월은 종료년월보다 늦을 수 없습니다."
+    if end_index - start_index > 2:
+        return None, "한 번의 조회 기간은 최대 3개월입니다. 기간을 나누어 조회해 주세요."
+    if not admin_code or not admin_code.isdigit():
+        return None, "주민등록 행정기관코드는 숫자로 입력해야 합니다. VWorld 법정구역 코드와 다를 수 있습니다."
+
+    level_map = {
+        "광역자치단체": "5", "시도": "5", "시·도": "5",
+        "기초자치단체": "6", "시군구": "6", "시·군·구": "6",
+        "광역시도 단위": "1", "시군구 단위": "2", "읍면동 단위": "3",
+        "읍면동 통반 단위": "4", "단일 시도 단위": "5",
+        "단일 시군구 단위": "6", "단일 읍면동 단위": "7",
+    }
+    level_value = level_map.get(str(level).strip(), str(level).strip())
+    if level_value not in {"1", "2", "3", "4", "5", "6", "7"}:
+        return None, "조회결과구분(lv)은 1~7 중에서 선택해야 합니다."
+    try:
+        page_no = int(page_no)
+        num_of_rows = int(num_of_rows)
+    except (TypeError, ValueError):
+        return None, "페이지 번호와 페이지당 건수는 숫자로 입력해야 합니다."
+    if page_no < 1 or not 1 <= num_of_rows <= 100:
+        return None, "페이지 번호는 1 이상, 페이지당 건수는 1~100이어야 합니다."
+
+    return {
+        "serviceKey": api_key_value,
+        "admmCd": admin_code,
+        "srchFrYm": start_month,
+        "srchToYm": end_month,
+        "lv": level_value,
+        "regSeCd": "1",
+        "type": "JSON",
+        "numOfRows": num_of_rows,
+        "pageNo": page_no,
+    }, ""
+
+
+def filter_public_service_rows(rows, keyword: str):
+    """서비스명 서버 필터가 공식 목록 명세에 없으므로 현재 페이지를 안전하게 로컬 검색합니다."""
+    keyword = str(keyword or "").strip()
+    if not keyword:
+        return rows, ""
+    needle = re.sub(r"\s+", "", keyword).casefold()
+    fields = ("서비스명", "서비스목적요약", "서비스분야", "지원대상", "지원내용", "소관기관명")
+    matched = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        haystack = " ".join(str(row.get(field, "")) for field in fields)
+        if needle in re.sub(r"\s+", "", haystack).casefold():
+            matched.append(row)
+    if matched:
+        return matched, ""
+    return [], "현재 조회한 페이지에서 검색어와 일치하는 공공서비스가 없습니다. 페이지 번호를 바꾸거나 검색어를 확인해 주세요."
+
+
 def data_go_call(item_id: str, extra=None):
-    """공공데이터포털 API 어댑터. 서비스별 독립 키를 사용하며, 확인되지 않은 변수는 보내지 않습니다."""
+    """공공데이터포털 API 어댑터. 각 서비스 전용 키와 공식 요청변수를 사용합니다."""
     if item_id not in API_ITEMS:
         return [], "등록되지 않은 공공데이터 항목입니다."
 
@@ -1048,25 +1156,25 @@ def data_go_call(item_id: str, extra=None):
     if not key:
         return [], api_key_error_message(key_name)
     url = item["url"]
+    extra = extra or {}
     params = {
         "serviceKey": key,
         "pageNo": 1,
         "numOfRows": 100,
         "resultType": "json",
     }
-    extra = extra or {}
+    benefit_keyword = ""
 
     if item_id == "winner":
         if not extra.get("sgId") or not extra.get("sgTypecode"):
             return [], "당선인 조회에는 선거 ID(sgId)와 선거종류코드(sgTypecode)가 필요합니다."
         params.update(extra)
     elif item_id == "candidate":
-        if not extra.get("name"):
+        # 중앙선거관리위원회 후보자 통합검색 공식 명세의 이름 검색변수는 name입니다.
+        candidate_name = str(extra.get("name", "")).strip()
+        if not candidate_name:
             return [], "후보자 통합검색은 이름 검색어가 필요합니다."
-        name_param = api_code("CANDIDATE_NAME_PARAM")
-        if not name_param:
-            return [], "후보자 이름 검색의 정확한 요청변수 이름이 확인되지 않았습니다. 공식 활용가이드를 확인한 뒤 API_CODES.CANDIDATE_NAME_PARAM에 등록해 주세요."
-        params[name_param] = str(extra["name"]).strip()
+        params["name"] = candidate_name
     elif item_id in ("staff", "suborg"):
         params["type"] = "xml"
         params.pop("resultType", None)
@@ -1075,14 +1183,16 @@ def data_go_call(item_id: str, extra=None):
                 return [], "기준년도는 YYYY 형식으로 입력해 주세요."
             params["bas_yy"] = str(extra["bas_yy"]).strip()
     elif item_id == "benefit":
-        # data.go.kr의 공식 OpenAPI Swagger: /gov24/v3/serviceList
-        url = api_url("MOIS_BENEFIT", item["url"])
-        if not url:
-            return [], "공공서비스 API의 HTTPS 요청 주소 설정을 확인해 주세요."
-        params = {"serviceKey": key, "page": 1, "perPage": 100, "returnType": "JSON"}
-        keyword = str(extra.get("keyword", "")).strip()
-        if keyword:
-            params["cond[서비스명::LIKE]"] = keyword
+        # 공식 목록 API에는 서비스명 LIKE 검색변수가 없어, 현재 페이지를 수신한 뒤 로컬에서 검색합니다.
+        url = item["url"]
+        benefit_keyword = str(extra.get("keyword", "")).strip()
+        try:
+            page = int(extra.get("page", 1))
+        except (TypeError, ValueError):
+            return [], "페이지 번호는 1 이상의 정수로 입력해 주세요."
+        if page < 1:
+            return [], "페이지 번호는 1 이상의 정수로 입력해 주세요."
+        params = {"serviceKey": key, "page": page, "perPage": 100, "returnType": "JSON"}
     elif item_id == "council":
         url = api_url("MOIS_COUNCIL_SEATS")
         if not url:
@@ -1090,26 +1200,35 @@ def data_go_call(item_id: str, extra=None):
         params["type"] = "xml"
         params.pop("resultType", None)
     elif item_id == "population":
-        url = api_url("MOIS_POPULATION")
-        if not url:
-            return [], "행정동별 인구 API의 정확한 상세 요청 주소를 API_URLS.MOIS_POPULATION에 등록해야 합니다."
-        month = str(extra.get("statsYm", "")).strip()
-        admin_code = str(extra.get("admCd", "")).strip()
-        month_param = api_code("MOIS_POPULATION_MONTH_PARAM")
-        admin_param = api_code("MOIS_POPULATION_ADMIN_PARAM")
-        if not re.fullmatch(r"\d{6}", month) or not 1 <= int(month[4:6]) <= 12:
-            return [], "통계년월은 YYYYMM 형식으로 입력해 주세요."
-        if not admin_code or not admin_code.isdigit():
-            return [], "지역별 주민등록 인구를 조회하려면 숫자로 된 행정기관코드가 필요합니다."
-        if not month_param or not admin_param:
-            return [], "인구 API의 통계년월·행정기관코드 요청변수 이름을 공식 활용가이드에서 확인한 뒤 API_CODES에 등록해야 합니다. 임의의 변수명은 전송하지 않습니다."
-        params["type"] = "xml"
-        params.pop("resultType", None)
-        params.update({month_param: month, admin_param: admin_code})
+        # 공공데이터포털 공식 명세의 요청주소·변수명을 그대로 사용합니다.
+        month = str(extra.get("month") or extra.get("statsYm", "")).strip()
+        start_month = str(extra.get("start_month") or month).strip()
+        end_month = str(extra.get("end_month") or month).strip()
+        admin_code = str(extra.get("admin_code") or extra.get("admCd", "")).strip()
+        level = extra.get("level", "기초자치단체")
+        population_params, error = build_mois_population_params(
+            key, admin_code, start_month, end_month, level,
+            page_no=extra.get("pageNo", 1), num_of_rows=extra.get("numOfRows", 100),
+        )
+        if error:
+            return [], error
+        params = population_params
+        url = item["url"]
 
     if extra and item_id not in ("winner", "candidate", "benefit", "population", "staff"):
         params.update(extra)
-    return call_api(item["title"], url, params)
+    rows, message = call_api(item["title"], url, params)
+    if item_id == "benefit" and not message and benefit_keyword:
+        return filter_public_service_rows(rows, benefit_keyword)
+    return rows, message
+
+KOSIS_VIEW_CODE_LABELS = {
+    "MT_ZTITLE": "국내통계 · 주제별",
+    "MT_OTITLE": "국내통계 · 기관별",
+    "MT_GTITLE01": "e-지방지표 · 주제별",
+    "MT_GTITLE02": "e-지방지표 · 지역별",
+    "MT_GTITLE03": "e-지방지표 · 테마별",
+}
 
 
 def kosis_list_call(parent_id: str, view_code: str):
@@ -1117,12 +1236,14 @@ def kosis_list_call(parent_id: str, view_code: str):
     if not key:
         return [], api_key_error_message("KOSIS_KEY")
     if not parent_id.strip():
-        return [], "KOSIS 통계목록을 조회하려면 목록 시작 ID(parentId)가 필요합니다."
+        return [], "KOSIS 통계목록을 조회하려면 목록 시작 ID(parentListId)가 필요합니다."
+    if view_code not in KOSIS_VIEW_CODE_LABELS:
+        return [], "공식 KOSIS 통계목록 유형에서 지원하는 뷰 코드를 선택해 주세요."
     params = {
         "method": "getList",
         "apiKey": key,
         "vwCd": view_code,
-        "parentId": parent_id.strip(),
+        "parentListId": parent_id.strip(),
         "format": "json",
         "jsonVD": "Y",
     }
@@ -1396,10 +1517,15 @@ def render_live_quiz_tools():
         with c2:
             election_type = st.text_input("선거종류코드 (sgTypecode)", placeholder="공식 선거 코드 확인", key="live_winner_type")
         c3, c4 = st.columns(2)
+        selected_sido = st.session_state.get("local_selected_sido", "")
+        selected_region = st.session_state.get("local_selected_sigungu", "")
+        nec_defaults = lookup_nec_region_params(selected_sido, selected_region)
         with c3:
-            sido = st.text_input("시도명 (선택)", key="live_winner_sido")
+            sido = st.text_input("시도명 (선택)", value=nec_defaults.get("sdName", selected_sido), key="live_winner_sido")
         with c4:
-            district_name = st.text_input("선거구명 (선택)", key="live_winner_district")
+            district_name = st.text_input("선거구명 (선택)", value=nec_defaults.get("sggName", selected_region), key="live_winner_district")
+        if nec_defaults.get("wiwName"):
+            st.caption(f"지역코드 엑셀의 wiwName 후보: {nec_defaults['wiwName']} (NEC 작업별 변수 확인 후 사용)")
         if st.button("당선인 자료 조회", key="live_winner_fetch"):
             extra = {"sgId": election_id.strip(), "sgTypecode": election_type.strip()}
             if sido.strip():
@@ -1521,7 +1647,6 @@ def render_quiz_session(quiz_questions):
             st.rerun()
 
     render_quiz_type_selector(quiz_questions)
-    render_live_quiz_tools()
 
 # ============================================================
 # 8. 실시간 API 퀴즈 생성
@@ -1798,6 +1923,10 @@ def render_quiz_hub(quiz_questions):
             st.markdown("### 게임 유형")
             st.write("현재 이용할 수 있는 유형은 오늘의 퀴즈와 객관식입니다. 십자말풀이와 빈칸 채우기는 문제 형식과 생성 규칙을 확정한 뒤 연결할 예정입니다.")
         render_quiz_type_selector(quiz_questions)
+        st.divider()
+        st.markdown("### 실제 정치인 자료로 퀴즈 만들기")
+        st.caption("공공데이터에서 조회한 국회의원·당선인·후보자 정보만 사용합니다. 인물의 경력은 API 응답에 실제로 포함된 경우에만 문제로 만듭니다.")
+        render_live_quiz_tools()
         return
 
     if mode in ("crossword", "fillblank"):
@@ -1938,11 +2067,11 @@ def render_api_catalog():
     configured_count = sum(api_key_is_configured(item["key"]) for item in API_ITEMS.values())
     duplicate_count = sum(api_key_status(item["key"]) == "중복" for item in API_ITEMS.values())
     st.info(
-        f"API별 개별 인증키 등록 상태: {configured_count}/12개 · "
-        "각 API는 서로 다른 인증키를 사용합니다. 같은 기관의 키를 공유하지 않습니다."
+        f"API별 Secrets 항목 등록 상태: {configured_count}/12개 · "
+        "국회사무처의 국회의원 정보·본회의 표결·국회일정은 동일한 인증키를 공유합니다."
     )
     if duplicate_count:
-        st.warning(f"인증키 값이 다른 API와 중복된 항목이 {duplicate_count}개 있습니다. 중복 키는 안전을 위해 API 요청에 사용하지 않습니다.")
+        st.warning(f"허용된 국회사무처 세 API 외의 인증키 중복 항목이 {duplicate_count}개 있습니다. 해당 요청은 차단됩니다.")
     for group in API_GROUPS:
         st.divider()
         head, count_col = st.columns([4, 1])
@@ -2013,9 +2142,9 @@ def render_api_detail(item_id):
     key_name = item.get("key", "")
     if key_name:
         if api_key_is_configured(key_name):
-            st.caption("🔑 이 API 전용 인증키가 Secrets에 등록되어 있습니다.")
+            st.caption("🔑 이 API에 연결된 인증키가 Secrets에 등록되어 있습니다. 국회사무처 세 API는 같은 열린국회정보 키를 사용합니다.")
         else:
-            st.warning(f"이 자료를 조회하려면 Streamlit Secrets의 API_KEYS.{key_name}에 해당 API 전용 인증키를 등록해야 합니다.")
+            st.warning(f"이 자료를 조회하려면 Streamlit Secrets의 API_KEYS.{key_name}에 해당 API 인증키를 등록해야 합니다. 국회사무처 세 API는 동일한 키 값을 사용합니다.")
 
     st.markdown("### 이 자료는 무엇인가?")
     st.write(item["description"])
@@ -2040,10 +2169,16 @@ def render_api_detail(item_id):
         with c2:
             sgtype = st.text_input("선거종류코드 (sgTypecode)", placeholder="공식 선거 코드 확인", key="detail_winner_type")
         c3, c4 = st.columns(2)
+        nec_defaults = lookup_nec_region_params(
+            st.session_state.get("local_selected_sido", ""),
+            st.session_state.get("local_selected_sigungu", ""),
+        )
         with c3:
-            sd_name = st.text_input("시도명 (선택)", key="detail_winner_sido")
+            sd_name = st.text_input("시도명 (선택)", value=nec_defaults.get("sdName", ""), key="detail_winner_sido")
         with c4:
-            sgg_name = st.text_input("선거구명 (선택)", key="detail_winner_sgg")
+            sgg_name = st.text_input("선거구명 (선택)", value=nec_defaults.get("sggName", ""), key="detail_winner_sgg")
+        if nec_defaults.get("wiwName"):
+            st.caption(f"엑셀의 wiwName 후보: {nec_defaults['wiwName']} (endpoint별 요청변수 확인 필요)")
         extra = {"sgId": sgid.strip(), "sgTypecode": sgtype.strip()}
         if sd_name.strip(): extra["sdName"] = sd_name.strip()
         if sgg_name.strip(): extra["sggName"] = sgg_name.strip()
@@ -2061,12 +2196,23 @@ def render_api_detail(item_id):
         base_year = st.text_input("기준년도 (bas_yy, 선택)", placeholder="예: 2025", key="detail_staff_year")
         extra = {"bas_yy": base_year.strip()} if base_year.strip() else {}
     elif item_id == "population":
-        month = st.text_input("통계년월 (YYYYMM)", value=korea_now().strftime("%Y%m"), key="detail_population_month")
-        admin_code = st.text_input("행정기관코드 (필수)", key="detail_population_admin", help="선택한 행정구역과 일치하는 공식 행정기관코드를 입력해야 합니다.")
-        extra = {"statsYm": month.strip(), "admCd": admin_code.strip()}
+        month = st.text_input("조회년월 (YYYYMM)", value=korea_now().strftime("%Y%m"), key="detail_population_month")
+        admin_code = st.text_input("행정기관코드 (필수)", key="detail_population_admin", help="공식 행정기관코드입니다. VWorld 법정구역 코드와 다를 수 있습니다.")
+        level = st.selectbox(
+            "조회결과 단위 (lv)",
+            ["5", "6", "7", "1", "2", "3", "4"],
+            format_func=lambda value: {
+                "1": "광역시도 단위", "2": "시군구 단위", "3": "읍면동 단위",
+                "4": "읍면동 통반 단위", "5": "단일 시도", "6": "단일 시군구", "7": "단일 읍면동",
+            }[value],
+            key="detail_population_level",
+        )
+        extra = {"month": month.strip(), "admin_code": admin_code.strip(), "level": level}
     elif item_id == "benefit":
         keyword = st.text_input("공공서비스 검색어 (선택)", key="detail_benefit_keyword")
-        extra = {"keyword": keyword.strip()} if keyword.strip() else {}
+        page = st.number_input("조회 페이지", min_value=1, max_value=1000, value=1, step=1, key="detail_benefit_page")
+        st.caption("공식 목록 API에 서비스명 검색 변수가 없어, 선택한 페이지의 최대 100건을 받은 뒤 화면에서 검색합니다.")
+        extra = {"keyword": keyword.strip(), "page": int(page)}
     elif item_id == "kosis":
         st.caption("KOSIS는 통계목록 ID와 통계표의 기관·항목·분류 코드가 필요합니다.")
         c1, c2 = st.columns(2)
@@ -2205,12 +2351,8 @@ def load_vworld_geojson(level: str):
         or parsed_domain.fragment
     ):
         return None, "브이월드에 등록한 HTTPS 서비스 도메인만 APP.VWORLD_DOMAIN에 입력해 주세요. 경로나 쿼리는 제외합니다."
-    # VWorld 행정구역 레이어 식별자는 공식 레이어 코드 표기(대문자)를 유지합니다.
-    layer = {
-        "시도": "LT_C_ADSIDO_INFO",
-        "시군구": "LT_C_ADSIGG_INFO",
-        "읍면동": "LT_C_ADEMD_INFO",
-    }.get(level)
+    # WFS 레이어명은 지역코드_연계표.xlsx에서 읽고, 확인된 공식 기본값으로만 대체합니다.
+    layer = lookup_vworld_wfs_layer(level)
     if not layer:
         return None, "지원하지 않는 행정구역 단위입니다."
     params = {
@@ -2286,17 +2428,42 @@ def population_admin_code_from_feature(feature):
     ))
 
 
-def filter_sigungu_geojson(geojson, sido_code):
-    if not geojson or not sido_code:
-        return None, "시도 코드가 없어 시군구 자료를 구분할 수 없습니다."
+def filter_sigungu_geojson(geojson, sido_code="", sido_name=""):
+    """시도 코드 접두어를 우선 사용하고, 불일치 시 코드북의 현행 지역명으로 대조합니다."""
+    if not geojson or not isinstance(geojson.get("features"), list):
+        return None, "VWorld 시군구 경계 자료가 비어 있습니다."
+    configured_field = lookup_vworld_property_field("lt_c_adsigg_info")
+    name_field = lookup_vworld_name_field("lt_c_adsigg_info")
+    name_fields = tuple([name_field] if name_field else []) + ("sig_kor_nm", "SIG_KOR_NM", "sig_nm", "sigungu_nm", "name", "NAME")
+    code_fields = tuple([configured_field] if configured_field else []) + ("sig_cd", "SIG_CD", "sig_cd2", "SIG_CD2")
     filtered = []
-    for feature in geojson.get("features", []):
-        props = feature.get("properties", {}) or {}
-        code = region_code({"properties": props}, ("sig_cd", "SIG_CD", "sig_cd2"))
-        if code.startswith(sido_code):
-            filtered.append(feature)
+    if sido_code:
+        for feature in geojson.get("features", []):
+            code = region_code(feature, code_fields)
+            if code and code.startswith(str(sido_code)):
+                filtered.append(feature)
+    # WFS 코드 필드가 없거나 개편 후 코드 접두어가 달라졌으면 이름을 사용해 안전하게 대조합니다.
+    if not filtered and sido_name:
+        for feature in geojson.get("features", []):
+            feature_name = region_property(feature, name_fields)
+            if match_local_codebook_name(sido_name, feature_name):
+                filtered.append(feature)
+    # 코드가 없는 경우에도 코드북에 이름이 있는 지역만 지도 선택 대상으로 둡니다.
+    elif filtered and sido_name:
+        allowed = set(get_local_region_names(sido_name))
+        matched = []
+        for feature in filtered:
+            feature_name = region_property(feature, name_fields)
+            canonical = match_local_codebook_name(sido_name, feature_name)
+            if canonical and (not allowed or canonical in allowed):
+                matched.append(feature)
+        if matched:
+            filtered = matched
     if not filtered:
-        return None, "선택한 시도에 해당하는 시군구 경계가 없습니다. VWorld 속성 코드 형식을 확인해 주세요."
+        return None, (
+            "선택한 광역자치단체에 해당하는 현행 시·군·구 경계를 찾지 못했습니다. "
+            "지역코드_연계표.xlsx의 VWorld 코드·필드명과 최신 행정구역 명칭을 확인해 주세요."
+        )
     return {**geojson, "features": filtered}, ""
 
 
@@ -2305,7 +2472,15 @@ def build_admin_map(geojson, zoom):
     if not isinstance(features, list) or not features:
         raise ValueError("지도에 표시할 행정구역 경계가 없습니다.")
     properties = [feature.get("properties", {}) or {} for feature in features]
-    name_fields = ("ctp_kor_nm", "sig_kor_nm", "emd_kor_nm", "name", "NAME")
+    configured_name_fields = [
+        lookup_vworld_name_field("lt_c_adsido_info"),
+        lookup_vworld_name_field("lt_c_adsigg_info"),
+        lookup_vworld_name_field("lt_c_ademd_info"),
+        lookup_vworld_name_field("lt_c_adri_info"),
+    ]
+    name_fields = tuple(dict.fromkeys([field for field in configured_name_fields if field] + [
+        "ctp_kor_nm", "sig_kor_nm", "emd_kor_nm", "li_kor_nm", "name", "NAME"
+    ]))
     # 모든 피처에 공통으로 존재하는 이름 필드만 툴팁으로 사용합니다.
     tooltip_field = next((field for field in name_fields if all(field in props for props in properties)), None)
     tooltip = folium.GeoJsonTooltip(fields=[tooltip_field], aliases=["행정구역"], sticky=True) if tooltip_field else None
@@ -2675,11 +2850,298 @@ def render_org_detail():
 # ============================================================
 
 
+# 지역명·코드의 실제 관리 원본은 GitHub 저장소의 지역코드_연계표.xlsx입니다.
+# 엑셀에서 코드를 수정하면 앱이 파일 수정 시각을 기준으로 다시 읽습니다.
 KOREA_SIDO_FALLBACK = [
-    "서울특별시", "부산광역시", "대구광역시", "인천광역시", "광주광역시", "대전광역시",
-    "울산광역시", "세종특별자치시", "경기도", "강원특별자치도", "충청북도", "충청남도",
-    "전북특별자치도", "전라남도", "경상북도", "경상남도", "제주특별자치도",
+    "서울특별시", "전남광주통합특별시", "부산광역시", "대구광역시", "인천광역시",
+    "대전광역시", "울산광역시", "세종특별자치시", "경기도", "강원특별자치도",
+    "충청북도", "충청남도", "전북특별자치도", "경상북도", "경상남도", "제주특별자치도",
 ]
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _read_region_codebook_sheet(path_text: str, modified_ns: int, sheet_name: str):
+    """엑셀 시트를 읽습니다. 파일이 없거나 열 제목이 깨져도 앱 전체를 중단하지 않습니다."""
+    try:
+        frame = pd.read_excel(path_text, sheet_name=sheet_name, dtype=str, engine="openpyxl")
+        return frame.fillna("")
+    except Exception:
+        return pd.DataFrame()
+
+
+def load_region_codebook_sheet(sheet_name: str = "광역_기초목록"):
+    try:
+        modified_ns = REGION_CODEBOOK_PATH.stat().st_mtime_ns
+    except OSError:
+        return pd.DataFrame()
+    return _read_region_codebook_sheet(str(REGION_CODEBOOK_PATH), modified_ns, sheet_name)
+
+
+def _normalize_region_label(value: str) -> str:
+    return re.sub(r"\s+", "", str(value or "")).strip()
+
+
+def get_sido_names() -> list[str]:
+    """엑셀의 현행 광역자치단체명을 우선 사용하고, 파일 누락 시 현행 목록으로 대체합니다."""
+    frame = load_region_codebook_sheet("광역_기초목록")
+    if not frame.empty and {"단계", "지역명", "자치단체여부"}.issubset(frame.columns):
+        selected = frame[(frame["단계"] == "광역") & (frame["자치단체여부"] == "예")]
+        names = [str(value).strip() for value in selected["지역명"].tolist() if str(value).strip()]
+        if names:
+            return list(dict.fromkeys(names))
+    return list(KOREA_SIDO_FALLBACK)
+
+
+def find_region_codebook_row(sido_name: str, region_name: str = "", step: str | None = None):
+    """광역명+지역명으로 코드북 행을 찾습니다. 코드값이 빈 경우에도 행 자체는 반환합니다."""
+    frame = load_region_codebook_sheet("광역_기초목록")
+    if frame.empty or "지역명" not in frame.columns:
+        return None
+    sido_norm = _normalize_region_label(sido_name)
+    region_norm = _normalize_region_label(region_name)
+    for _, row in frame.iterrows():
+        row_step = str(row.get("단계", "")).strip()
+        row_sido = _normalize_region_label(row.get("상위광역명", ""))
+        row_name = _normalize_region_label(row.get("지역명", ""))
+        if step and row_step != step:
+            continue
+        if region_norm:
+            if row_name != region_norm and not region_norm.endswith(row_name):
+                continue
+            if row_step == "광역":
+                if row_name != region_norm:
+                    continue
+            elif row_sido != sido_norm:
+                continue
+        else:
+            if row_step != "광역" or row_name != sido_norm:
+                continue
+        return row.to_dict()
+    return None
+
+
+def lookup_region_codebook_value(sido_name: str, region_name: str, column_name: str, step: str | None = None) -> str:
+    row = find_region_codebook_row(sido_name, region_name, step)
+    value = str(row.get(column_name, "")).strip() if row else ""
+    return "" if value.lower() in {"nan", "none"} else value
+
+
+def get_local_region_names(sido_name: str) -> list[str]:
+    """자치단체인 기초지역과 제주 행정시를 반환합니다. 일반구는 기초자치단체에서 제외합니다."""
+    frame = load_region_codebook_sheet("광역_기초목록")
+    if frame.empty or not {"단계", "상위광역명", "지역명", "행정구역유형", "자치단체여부"}.issubset(frame.columns):
+        return []
+    sido_norm = _normalize_region_label(sido_name)
+    rows = frame[
+        (frame["상위광역명"].map(_normalize_region_label) == sido_norm)
+        & (frame["단계"].isin(["기초", "행정시"]))
+    ]
+    names = []
+    for _, row in rows.iterrows():
+        kind = str(row.get("행정구역유형", "")).strip()
+        is_local = str(row.get("자치단체여부", "")).strip() == "예"
+        if is_local or kind == "행정시":
+            name = str(row.get("지역명", "")).strip()
+            if name:
+                names.append(name)
+    return list(dict.fromkeys(names))
+
+
+def match_sido_codebook_name(name: str) -> str:
+    """지도에서 받은 이름을 현재 코드북의 광역자치단체명과 대조합니다."""
+    target = _normalize_region_label(name)
+    for current_name in get_sido_names():
+        if _normalize_region_label(current_name) == target:
+            return current_name
+    return ""
+
+
+def match_local_codebook_name(sido_name: str, name: str) -> str:
+    """VWorld 피처 이름(상위지역명이 붙은 경우 포함)을 코드북의 현행 시군구명으로 정규화합니다."""
+    target = _normalize_region_label(name)
+    candidates = get_local_region_names(sido_name)
+    exact = [candidate for candidate in candidates if _normalize_region_label(candidate) == target]
+    if len(exact) == 1:
+        return exact[0]
+    suffix = [candidate for candidate in candidates if target.endswith(_normalize_region_label(candidate))]
+    return suffix[0] if len(suffix) == 1 else ""
+
+
+def lookup_population_admin_code(sido_name: str, region_name: str, level: str) -> str:
+    """엑셀에서 주민등록 API admmCd를 찾습니다. KiKcd_H와 같은 코드 체계의 열을 보조로 읽습니다.
+
+    MOIS_admmCd(행정기관코드)와 MOIS_KiKcd_H(행정동코드)는 모두 MOIS 행정기관코드 계열입니다.
+    사용자가 둘 중 하나만 입력해도 조회에 쓰며, 법정동(KiKcd_B), KiKmix, VWorld 코드는 절대 대체 사용하지 않습니다.
+    """
+    step = "광역" if level == "광역자치단체" else "기초"
+    row = find_region_codebook_row(sido_name, region_name, step=step)
+    if not row:
+        return ""
+    for column in ("MOIS_admmCd(행정기관코드)", "MOIS_KiKcd_H(행정동코드)"):
+        value = str(row.get(column, "") or "").strip()
+        if value.lower() in {"nan", "none"}:
+            continue
+        # 코드가 숫자 문자열로 보존된 경우에만 사용합니다. Excel 숫자 셀에서 앞자리 0이
+        # 사라졌을 수 있으므로, 사용안내에서 셀 서식을 텍스트로 유지하도록 안내합니다.
+        if value and value.isdigit():
+            return value
+    return ""
+
+
+def is_single_tier_local_authority(sido_name: str) -> bool:
+    """세종처럼 별도 시·군·구 단계가 없는 단층제 광역자치단체인지 확인합니다."""
+    row = find_region_codebook_row(sido_name, sido_name, step="기초")
+    return bool(row and str(row.get("행정구역유형", "")).strip() == "특별자치시(단층제)")
+
+
+def lookup_admin_legal_dong_mappings(sido_name: str, sigungu_name: str, administrative_dong_name: str) -> list[dict]:
+    """행정동_법정동_매핑 시트에서 정확히 일치하는 사용자 입력 매핑을 모두 반환합니다."""
+    frame = load_region_codebook_sheet("행정동_법정동_매핑")
+    required = {"광역자치단체명", "시군구명", "행정동명"}
+    if frame.empty or not required.issubset(frame.columns):
+        return []
+    sido_norm = _normalize_region_label(sido_name)
+    sigungu_norm = _normalize_region_label(sigungu_name)
+    dong_norm = _normalize_region_label(administrative_dong_name)
+    if not sido_norm or not dong_norm:
+        return []
+    selected = frame[
+        (frame["광역자치단체명"].map(_normalize_region_label) == sido_norm)
+        & (frame["시군구명"].map(_normalize_region_label) == sigungu_norm)
+        & (frame["행정동명"].map(_normalize_region_label) == dong_norm)
+    ]
+    columns = [
+        "광역자치단체명", "시군구명", "행정동명",
+        "MOIS_행정기관코드(KiKcd_H/admmCd)", "법정동명",
+        "MOIS_법정동코드(KiKcd_B)", "MOIS_KiKmix_원문행",
+        "시행일", "현재사용여부", "폐지일", "출처파일", "확인상태", "메모",
+    ]
+    return [
+        {column: str(row.get(column, "")).strip() for column in columns}
+        for _, row in selected.iterrows()
+    ]
+
+
+def lookup_vworld_code(sido_name: str, region_name: str, level: str) -> str:
+    step = "광역" if level == "시도" else None
+    return lookup_region_codebook_value(sido_name, region_name, "VWorld_지역코드", step)
+
+
+def _normalize_vworld_layer_name(value: str) -> str:
+    """WFS 레이어 식별자는 대소문자 표기를 정규화해 비교합니다."""
+    return re.sub(r"\s+", "", str(value or "")).upper()
+
+
+def lookup_vworld_wfs_layer(level: str) -> str:
+    """VWorld_레이어 시트에서 WFS 레이어명을 읽습니다. 미등록 시 검증된 기본값을 씁니다."""
+    fallbacks = {
+        "광역": "LT_C_ADSIDO_INFO",
+        "시군구": "LT_C_ADSIGG_INFO",
+        "읍면동": "LT_C_ADEMD_INFO",
+        "리": "LT_C_ADRI_INFO",
+    }
+    frame = load_region_codebook_sheet("VWorld_레이어")
+    if not frame.empty and {"단계", "WFS레이어명(공식)"}.issubset(frame.columns):
+        rows = frame[frame["단계"].astype(str).str.strip() == str(level).strip()]
+        if not rows.empty:
+            candidate = str(rows.iloc[0].get("WFS레이어명(공식)", "")).strip()
+            if re.fullmatch(r"LT_C_[A-Z0-9_]+", _normalize_vworld_layer_name(candidate)):
+                return _normalize_vworld_layer_name(candidate)
+    return fallbacks.get(level, "")
+
+
+def _vworld_layer_rows(layer_name: str):
+    frame = load_region_codebook_sheet("VWorld_레이어")
+    if frame.empty or "WFS레이어명(공식)" not in frame.columns:
+        return frame
+    target = _normalize_vworld_layer_name(layer_name)
+    return frame[frame["WFS레이어명(공식)"].map(_normalize_vworld_layer_name) == target]
+
+
+def lookup_vworld_property_field(layer_name: str) -> str:
+    frame = _vworld_layer_rows(layer_name)
+    if frame.empty:
+        return ""
+    field_column = "코드 필드명(공식 예제 확인)" if "코드 필드명(공식 예제 확인)" in frame.columns else "속성 필드명(응답 확인 후 입력)"
+    if field_column not in frame.columns:
+        return ""
+    return str(frame.iloc[0].get(field_column, "") or "").strip()
+
+
+def lookup_vworld_name_field(layer_name: str) -> str:
+    """지역코드 엑셀의 VWorld 명칭 필드를 우선 사용합니다(레이어 대소문자 무관)."""
+    frame = _vworld_layer_rows(layer_name)
+    if frame.empty or "명칭 필드명(공식 예제 확인)" not in frame.columns:
+        return ""
+    return str(frame.iloc[0].get("명칭 필드명(공식 예제 확인)", "") or "").strip()
+
+
+def lookup_nec_region_params(sido_name: str = "", region_name: str = "") -> dict:
+    """NEC_선거지역명 시트의 지역명 후보를 반환합니다. 값은 코드가 아닌 문자열 검색어입니다."""
+    frame = load_region_codebook_sheet("NEC_선거지역명")
+    if frame.empty:
+        return {"sdName": "", "sggName": "", "wiwName": ""}
+    sido_col = "광역자치단체명(sdName 후보)"
+    sgg_col = "기초지역명(sggName 후보)"
+    wiw_col = "기초지역명(wiwName 후보)"
+    if not {sido_col, sgg_col, wiw_col}.issubset(frame.columns):
+        return {"sdName": "", "sggName": "", "wiwName": ""}
+    sido_norm = _normalize_region_label(sido_name)
+    region_norm = _normalize_region_label(region_name)
+    candidates = []
+    for _, row in frame.iterrows():
+        row_sido = _normalize_region_label(row.get(sido_col, ""))
+        row_sgg = _normalize_region_label(row.get(sgg_col, ""))
+        if sido_norm and row_sido != sido_norm:
+            continue
+        if region_norm and row_sgg != region_norm:
+            continue
+        if not region_norm and row_sgg:
+            continue
+        candidates.append(row)
+    if not candidates:
+        return {"sdName": "", "sggName": "", "wiwName": ""}
+    row = candidates[0]
+    return {
+        "sdName": str(row.get(sido_col, "")).strip(),
+        "sggName": str(row.get(sgg_col, "")).strip(),
+        "wiwName": str(row.get(wiw_col, "")).strip(),
+    }
+
+
+def lookup_kosis_codebook_config(sido_name: str, region_name: str, metric_label: str) -> dict:
+    """KOSIS 일반 지표 설정과 지역별 OBJ_L1 매핑을 병합합니다. 빈 값은 추정하지 않습니다."""
+    result = {"ORG_ID": "", "TBL_ID": "", "ITM_ID": "", "OBJ_L1": "", "OBJ_L2": "", "OBJ_L3": "", "PRD_SE": ""}
+    metrics = load_region_codebook_sheet("KOSIS_통계표별")
+    if not metrics.empty and "지표명" in metrics.columns:
+        rows = metrics[metrics["지표명"].astype(str).str.strip() == str(metric_label).strip()]
+        if not rows.empty:
+            row = rows.iloc[0]
+            for key, column in (("ORG_ID", "ORG_ID"), ("TBL_ID", "TBL_ID"), ("ITM_ID", "ITM_ID"),
+                                ("OBJ_L1", "OBJ_L1(지역분류)"), ("OBJ_L2", "OBJ_L2"),
+                                ("OBJ_L3", "OBJ_L3"), ("PRD_SE", "PRD_SE")):
+                value = str(row.get(column, "")).strip()
+                if value and value.lower() not in {"nan", "none"}:
+                    result[key] = value
+    region_map = load_region_codebook_sheet("KOSIS_지역분류_매핑")
+    required = {"광역자치단체명", "지역명", "지표명"}
+    if not region_map.empty and required.issubset(region_map.columns):
+        sido_norm = _normalize_region_label(sido_name)
+        region_norm = _normalize_region_label(region_name)
+        selected = region_map[
+            (region_map["광역자치단체명"].map(_normalize_region_label) == sido_norm)
+            & (region_map["지역명"].map(_normalize_region_label) == region_norm)
+            & (region_map["지표명"].astype(str).str.strip() == str(metric_label).strip())
+        ]
+        if len(selected) == 1:
+            row = selected.iloc[0]
+            for key, column in (("OBJ_L1", "OBJ_L1(지역분류값)"), ("OBJ_L2", "OBJ_L2"), ("OBJ_L3", "OBJ_L3"),
+                                ("ORG_ID", "ORG_ID(선택)"), ("TBL_ID", "TBL_ID(선택)"),
+                                ("ITM_ID", "ITM_ID(선택)"), ("PRD_SE", "PRD_SE(선택)")):
+                value = str(row.get(column, "")).strip()
+                if value and value.lower() not in {"nan", "none"}:
+                    result[key] = value
+    return result
 
 
 def _region_cache_key(level: str, region_name: str) -> str:
@@ -2722,9 +3184,9 @@ def _reset_local_region_data():
 def _select_sido(name: str, feature=None):
     st.session_state.local_selected_sido = name
     st.session_state.local_sido_feature = feature
-    st.session_state.local_selected_sido_code = region_code(
-        feature or {}, ("ctprvn_cd", "CTPRVN_CD", "ctprvnCode", "CTP_CD")
-    ) if feature else ""
+    configured_field = lookup_vworld_property_field("lt_c_adsido_info")
+    fields = tuple([configured_field] if configured_field else []) + ("ctprvn_cd", "CTPRVN_CD", "ctprvnCode", "CTP_CD")
+    st.session_state.local_selected_sido_code = (region_code(feature or {}, fields) if feature else "") or lookup_vworld_code(name, name, "시도")
     st.session_state.local_selected_sigungu = ""
     st.session_state.local_selected_sigungu_code = ""
     st.session_state.local_sigungu_feature = None
@@ -2738,9 +3200,10 @@ def _select_sido(name: str, feature=None):
 def _select_sigungu(name: str, feature=None):
     st.session_state.local_selected_sigungu = name
     st.session_state.local_sigungu_feature = feature
-    st.session_state.local_selected_sigungu_code = region_code(
-        feature or {}, ("sig_cd", "SIG_CD", "sig_cd2", "SIG_CD2")
-    ) if feature else ""
+    configured_field = lookup_vworld_property_field("lt_c_adsigg_info")
+    fields = tuple([configured_field] if configured_field else []) + ("sig_cd", "SIG_CD", "sig_cd2", "SIG_CD2")
+    sido_name = st.session_state.get("local_selected_sido", "")
+    st.session_state.local_selected_sigungu_code = (region_code(feature or {}, fields) if feature else "") or lookup_vworld_code(sido_name, name, "시군구")
     st.session_state.local_stage = "detail"
     st.session_state.page = "지방정부 상세"
     _reset_local_region_data()
@@ -2790,9 +3253,9 @@ def _ensure_local_map(level: str):
     with st.spinner(f"{st.session_state.get('local_selected_sido', '선택 지역')}의 시·군·구 경계를 불러오는 중입니다..."):
         raw_geo, message = load_vworld_geojson("시군구")
     if raw_geo:
-        filtered, filter_message = filter_sigungu_geojson(
-            raw_geo, st.session_state.get("local_selected_sido_code", "")
-        )
+        sido_name = st.session_state.get("local_selected_sido", "")
+        sido_code = st.session_state.get("local_selected_sido_code", "") or lookup_vworld_code(sido_name, sido_name, "시도")
+        filtered, filter_message = filter_sigungu_geojson(raw_geo, sido_code, sido_name)
         geo = filtered
         message = filter_message
     else:
@@ -2943,8 +3406,10 @@ def extract_kosis_region_metric(rows, metric_label: str, region_name: str):
 
         unit = first_field(row, ("UNIT_NM", "unitNm", "단위명"), "")
         unit_text = _kosis_normalized_text(unit)
-        if rule["unit_kind"] in ("count", "rate_count") and ("명" not in unit_text or "%" in unit):
-            continue
+        if rule["unit_kind"] in ("count", "rate_count"):
+            # 천명·만명 등 배율 단위는 단위를 변환하지 않는 한 카드의 '명'과 혼동될 수 있어 제외합니다.
+            if "명" not in unit_text or "%" in unit or any(scale in unit_text for scale in ("천", "만", "억")):
+                continue
         if rule["unit_kind"] == "percent" and not ("%" in unit or "퍼센트" in unit_text):
             continue
 
@@ -2997,6 +3462,22 @@ def extract_kosis_region_metric(rows, metric_label: str, region_name: str):
     return latest[0], ""
 
 
+def update_kosis_metric_values(existing_values, metric_label: str, rows, region_name: str, request_error=""):
+    """선택 지표의 이전 값은 먼저 제거하고, 새 응답이 정확히 맞을 때만 다시 저장합니다."""
+    updated = dict(existing_values or {})
+    rule = KOSIS_METRIC_RULES.get(metric_label)
+    if not rule:
+        return updated, ""
+    metric_key = rule["metric_key"]
+    updated.pop(metric_key, None)
+    if request_error or not rows:
+        return updated, "새 조회 결과가 없어 이전 수치를 지웠습니다. 조회 조건과 API 응답을 확인해 주세요."
+    metric_value, message = extract_kosis_region_metric(rows, metric_label, region_name)
+    if metric_value:
+        updated[metric_key] = metric_value
+    return updated, message
+
+
 def render_region_statistics(region_name: str, feature=None, level="기초자치단체", parent=False):
     """시안의 7개 항목을 고정 순서로 보여주며 지역별 조회 결과를 분리합니다."""
     region_data = _region_data_cache(level, region_name)
@@ -3039,18 +3520,26 @@ def _region_data_tools(region_name: str, level: str, feature=None):
     """지역별 통계를 수집합니다. 광역·기초 자료를 별도 저장하고 원자료를 함께 표시합니다."""
     cache = _region_data_cache(level, region_name)
     token = _region_widget_token(level, region_name)
-    auto_admin_code = population_admin_code_from_feature(feature)
+    sido_name = st.session_state.get("local_selected_sido", "")
+    explicit_admin_code = population_admin_code_from_feature(feature)
+    codebook_admin_code = lookup_population_admin_code(sido_name, region_name, level)
+    auto_admin_code = explicit_admin_code or codebook_admin_code
     vworld_code = region_code(feature or {}, (
+        lookup_vworld_property_field("lt_c_adsigg_info" if level != "광역자치단체" else "lt_c_adsido_info"),
         "ctprvn_cd", "CTPRVN_CD", "sig_cd", "SIG_CD", "emd_cd", "EMD_CD",
-    )) if feature else ""
+    )) if feature else lookup_vworld_code(sido_name, region_name, "시군구" if level != "광역자치단체" else "시도")
 
     with st.expander("지역 통계 원자료 조회 및 기준 설정", expanded=False):
         st.markdown("**주민등록인구·세대현황**")
         st.caption("행정안전부 API는 통계년월과 행정기관코드를 기준으로 자료를 제공합니다. VWorld의 법정구역 코드와 주민등록 행정기관코드는 동일하다고 가정하지 않습니다.")
         if vworld_code:
             st.caption(f"지도에서 확인한 VWorld 행정구역 코드: {vworld_code}")
-        if auto_admin_code:
-            st.caption("지도 응답에 주민등록 행정기관코드가 명시되어 있어 자동 입력했습니다.")
+        if explicit_admin_code:
+            st.caption("지도 응답에 주민등록 행정기관코드가 직접 포함되어 있어 자동 입력했습니다.")
+        elif codebook_admin_code:
+            st.caption("지역코드_연계표.xlsx에서 해당 지역의 MOIS admmCd를 읽어 자동 입력했습니다.")
+        else:
+            st.caption("지역코드_연계표.xlsx의 MOIS_admmCd가 비어 있어 직접 입력이 필요합니다. KiKcd_B·VWorld 코드를 대신 넣지 마세요.")
         c1, c2 = st.columns(2)
         with c1:
             month = st.text_input(
@@ -3064,7 +3553,10 @@ def _region_data_tools(region_name: str, level: str, feature=None):
                 help="VWorld 코드와 별도일 수 있습니다. 공식 행정기관코드를 확인한 뒤 입력하세요.",
             )
         if st.button("주민등록 원자료 조회", key=f"local_population_fetch_{token}", type="primary"):
-            rows, message = data_go_call("population", {"statsYm": month.strip(), "admCd": admin_code.strip()})
+            population_level = "5" if level == "광역자치단체" else "6"
+            rows, message = data_go_call("population", {
+                "month": month.strip(), "admin_code": admin_code.strip(), "level": population_level,
+            })
             _save_region_data_cache(
                 level, region_name,
                 population_rows=rows, population_error=message,
@@ -3076,6 +3568,20 @@ def _region_data_tools(region_name: str, level: str, feature=None):
         if cache.get("population_rows"):
             st.caption(f"{region_name} · 기준월 {cache.get('population_month', '확인 필요')} · 원자료")
             table_view(cache["population_rows"], 100)
+
+        with st.expander("행정동·법정동 코드 매핑표 확인", expanded=False):
+            st.caption("지역코드_연계표.xlsx의 행정동_법정동_매핑 시트에서 사용자가 입력한 행정동·법정동 연결만 조회합니다. 빈 코드나 이름이 비슷한 행은 자동으로 추정하지 않습니다.")
+            dong_lookup_name = st.text_input("행정동명", key=f"local_dong_mapping_name_{token}", placeholder="예: 행정동명")
+            if st.button("엑셀 매핑표 조회", key=f"local_dong_mapping_lookup_{token}", disabled=not dong_lookup_name.strip()):
+                mapping_rows = lookup_admin_legal_dong_mappings(
+                    sido_name,
+                    "" if level == "광역자치단체" else region_name,
+                    dong_lookup_name.strip(),
+                )
+                if mapping_rows:
+                    st.dataframe(pd.DataFrame(mapping_rows), use_container_width=True, hide_index=True)
+                else:
+                    st.info("일치하는 매핑 행이 없습니다. 지역코드_연계표.xlsx의 행정동_법정동_매핑 시트에 행정동명과 확인된 코드를 입력해 주세요.")
 
         st.divider()
         st.markdown("**지방의회의원 정수 통계**")
@@ -3096,14 +3602,12 @@ def _region_data_tools(region_name: str, level: str, feature=None):
         with list_col1:
             view_code = st.selectbox(
                 "통계목록 유형",
-                ["MT_GTITLE01", "MT_GTITLE02", "MT_GTITLE03", "MT_ATITLE01", "MT_ATITLE02"],
+                ["MT_GTITLE01", "MT_GTITLE02", "MT_GTITLE03"],
                 key=f"local_kosis_view_{token}",
                 format_func=lambda value: {
                     "MT_GTITLE01": "e-지방지표 · 주제별",
                     "MT_GTITLE02": "e-지방지표 · 지역별",
                     "MT_GTITLE03": "e-지방지표 · 테마별",
-                    "MT_ATITLE01": "지역통계 · 주제별",
-                    "MT_ATITLE02": "지역통계 · 기관별",
                 }.get(value, value),
             )
         with list_col2:
@@ -3118,44 +3622,49 @@ def _region_data_tools(region_name: str, level: str, feature=None):
             table_view(cache["kosis_list_rows"], 100)
             st.caption("목록의 TBL_ID·ORG_ID와 통계표 설명을 확인한 뒤 아래 조회 항목을 입력하세요.")
 
+        metric_target = st.selectbox(
+            "원자료를 지역 통계 카드에 연결",
+            ["원자료 표만 조회", "출생아 수", "합계출산율", "고령인구 비율", "청년인구 비율"],
+            key=f"local_kosis_metric_target_{token}",
+            help="지역코드_연계표.xlsx의 KOSIS_통계표별·KOSIS_지역분류_매핑 시트 값을 우선 불러옵니다. 빈칸은 직접 입력할 수 있습니다.",
+        )
+        kosis_defaults = lookup_kosis_codebook_config(
+            st.session_state.get("local_selected_sido", region_name if level == "광역자치단체" else ""),
+            region_name,
+            metric_target,
+        ) if metric_target != "원자료 표만 조회" else {}
         c1, c2, c3 = st.columns(3)
         with c1:
-            org_id = st.text_input("기관 ID (orgId)", key=f"local_kosis_org_{token}")
+            org_id = st.text_input("기관 ID (orgId)", value=kosis_defaults.get("ORG_ID", ""), key=f"local_kosis_org_{token}")
         with c2:
-            table_id = st.text_input("통계표 ID (tblId)", key=f"local_kosis_table_{token}")
+            table_id = st.text_input("통계표 ID (tblId)", value=kosis_defaults.get("TBL_ID", ""), key=f"local_kosis_table_{token}")
         with c3:
-            item_id = st.text_input("항목 ID (itmId)", value="ALL", key=f"local_kosis_item_{token}")
+            item_id = st.text_input("항목 ID (itmId)", value=kosis_defaults.get("ITM_ID", "ALL") or "ALL", key=f"local_kosis_item_{token}")
         c4, c5 = st.columns(2)
         with c4:
             region_code_input = st.text_input(
-                "지역 분류값 (objL1)", key=f"local_kosis_region_{token}",
-                help="KOSIS 통계표별 메타자료에서 선택 지역에 대응하는 분류값을 확인해야 합니다.",
+                "지역 분류값 (objL1)", value=kosis_defaults.get("OBJ_L1", ""), key=f"local_kosis_region_{token}",
+                help="KOSIS 통계표별 지역 분류값입니다. 엑셀에서 입력한 코드가 있으면 자동으로 불러옵니다. 다른 행정코드를 대신 넣지 마세요.",
             )
         with c5:
-            period = st.selectbox("수록주기", ["Y", "S", "Q", "M", "D"], key=f"local_kosis_period_{token}")
+            period = st.selectbox("수록주기", ["Y", "S", "Q", "M", "D"], index=( ["Y", "S", "Q", "M", "D"].index(kosis_defaults.get("PRD_SE")) if kosis_defaults.get("PRD_SE") in ["Y", "S", "Q", "M", "D"] else 0 ), key=f"local_kosis_period_{token}")
         period_help = {"D": "YYYYMMDD", "M": "YYYYMM", "Q": "YYYY01~YYYY04", "S": "YYYY01~YYYY02", "Y": "YYYY"}[period]
         c6, c7 = st.columns(2)
         with c6:
             start_period = st.text_input("시작 시점 (선택)", key=f"local_kosis_start_{token}", help=period_help)
         with c7:
             end_period = st.text_input("종료 시점 (선택)", key=f"local_kosis_end_{token}", help=period_help)
-        metric_target = st.selectbox(
-            "원자료를 지역 통계 카드에 연결",
-            ["원자료 표만 조회", "출생아 수", "합계출산율", "고령인구 비율", "청년인구 비율"],
-            key=f"local_kosis_metric_target_{token}",
-            help="선택한 지표의 이름·단위·지역 분류명·기준시점이 원자료에서 확인될 때만 위 통계 카드에 반영합니다.",
-        )
+        if kosis_defaults:
+            st.caption("기관·통계표·항목·지역 분류 기본값은 지역코드_연계표.xlsx에서 불러왔습니다. 비어 있는 셀은 엑셀에서 채우거나 여기서 직접 입력할 수 있습니다.")
         if st.button("KOSIS 지역통계 원자료 조회", key=f"local_kosis_fetch_{token}"):
             rows, message = kosis_data_call(org_id, table_id, item_id, region_code_input, period, start_period, end_period)
             updates = {"kosis_rows": rows, "kosis_error": message, "kosis_metric_error": ""}
-            if rows and not message and metric_target != "원자료 표만 조회":
-                metric_value, metric_message = extract_kosis_region_metric(rows, metric_target, region_name)
+            if metric_target != "원자료 표만 조회":
+                metric_values, metric_message = update_kosis_metric_values(
+                    cache.get("kosis_metric_values", {}), metric_target, rows, region_name, message,
+                )
+                updates["kosis_metric_values"] = metric_values
                 updates["kosis_metric_error"] = metric_message
-                if metric_value:
-                    metric_values = dict(cache.get("kosis_metric_values", {}))
-                    metric_key = KOSIS_METRIC_RULES[metric_target]["metric_key"]
-                    metric_values[metric_key] = metric_value
-                    updates["kosis_metric_values"] = metric_values
             _save_region_data_cache(level, region_name, **updates)
             st.rerun()
         if cache.get("kosis_error"):
@@ -3177,7 +3686,9 @@ def _render_local_map(geo, level, map_key, zoom):
         returned_objects=["last_object_clicked_tooltip", "last_object_clicked_count", "last_active_drawing"],
         key=map_key,
     ) or {}
-    fields = (
+    layer_name = "lt_c_adsido_info" if level == "시도" else "lt_c_adsigg_info"
+    configured_name_field = lookup_vworld_name_field(layer_name)
+    fields = tuple([configured_name_field] if configured_name_field else []) + (
         ("ctp_kor_nm", "CTP_KOR_NM", "sido_nm", "name", "NAME")
         if level == "시도" else
         ("sig_kor_nm", "SIG_KOR_NM", "sig_nm", "sigungu_nm", "name", "NAME")
@@ -3202,29 +3713,42 @@ def _render_local_map(geo, level, map_key, zoom):
 def render_local_government():
     """전국 지도 → 광역자치단체 → 시군구 화면으로 이동합니다."""
     render_hero("지방 정부", "대한민국 지도에서 광역자치단체를 선택한 뒤 해당 지역의 기초자치단체를 살펴봅니다.")
-    st.caption("지도에서 지역을 선택하면 다음 화면으로 이동합니다. 지도 연결에 실패하면 지역 목록으로 선택할 수 있습니다.")
+    st.caption("지역명과 API별 코드는 저장소의 지역코드_연계표.xlsx에서 관리합니다. 빈 코드 셀은 직접 확인 후 입력할 수 있습니다.")
     geo, message = _ensure_local_map("시도")
     if message:
         st.warning(message)
+    sido_names = get_sido_names()
+    feature_by_sido = {}
     if geo and HAS_MAP:
         if geo.get("_truncated_notice"):
             st.warning(geo["_truncated_notice"])
         selected, feature = _render_local_map(geo, "시도", "local_sido_map_final", 7)
         if selected:
-            _select_sido(selected, feature)
-            st.rerun()
-        names = [region_property(f, ("ctp_kor_nm", "CTP_KOR_NM", "sido_nm", "name", "NAME")) for f in geo.get("features", [])]
-        names = [name for name in names if name != "이름 정보 없음"]
-        if names:
-            choice = st.selectbox("지도에서 선택하기 어려우면 시·도를 목록에서 선택하세요.", ["선택하세요"] + names, key="final_sido_choice")
-            if choice != "선택하세요" and st.button("선택한 광역자치단체로 이동", key="final_sido_next", type="primary"):
-                feature = next((f for f in geo.get("features", []) if region_property(f, ("ctp_kor_nm", "CTP_KOR_NM", "sido_nm", "name", "NAME")) == choice), None)
-                _select_sido(choice, feature)
+            canonical = match_sido_codebook_name(selected)
+            if canonical:
+                _select_sido(canonical, feature)
                 st.rerun()
+            else:
+                st.warning(f"지도에서 선택한 '{selected}'은 지역코드_연계표.xlsx의 현행 광역명과 일치하지 않습니다. 행정구역 개편 후 WFS 경계가 갱신되었는지 확인해 주세요.")
+        configured_name_field = lookup_vworld_name_field("lt_c_adsido_info")
+        name_fields = tuple([configured_name_field] if configured_name_field else []) + ("ctp_kor_nm", "CTP_KOR_NM", "sido_nm", "name", "NAME")
+        for map_feature in geo.get("features", []):
+            map_name = region_property(map_feature, name_fields)
+            canonical = match_sido_codebook_name(map_name)
+            if canonical:
+                feature_by_sido[canonical] = map_feature
+        missing = [name for name in sido_names if name not in feature_by_sido]
+        if missing:
+            st.warning("VWorld 지도 응답에서 다음 현행 광역자치단체 경계를 찾지 못했습니다: " + ", ".join(missing) + ". 아래 목록 선택은 가능하지만, 해당 지역의 지도 경계는 WFS 최신 자료가 필요합니다.")
+        choice = st.selectbox("광역자치단체 선택", ["선택하세요"] + sido_names, key="codebook_sido_choice")
+        if choice != "선택하세요" and st.button("선택한 광역자치단체로 이동", key="codebook_sido_next", type="primary"):
+            _select_sido(choice, feature_by_sido.get(choice))
+            st.rerun()
     else:
-        st.info("행정구역 지도 데이터를 사용할 수 없어 17개 광역자치단체 목록을 표시합니다.")
+        if not REGION_CODEBOOK_PATH.exists():
+            st.warning("지역코드_연계표.xlsx가 없습니다. GitHub 저장소 최상위에 엑셀 파일을 올려 주세요. 내장된 2026년 현행 광역명 목록으로 임시 선택을 제공합니다.")
         cols = st.columns(3)
-        for index, name in enumerate(KOREA_SIDO_FALLBACK):
+        for index, name in enumerate(sido_names):
             with cols[index % 3]:
                 if st.button(name, key=f"fallback_sido_{index}", use_container_width=True):
                     _select_sido(name, None)
@@ -3248,38 +3772,67 @@ def render_local_sigungu():
             _change_local_sido()
             st.rerun()
 
+    # 세종특별자치시는 단층제이므로 별도 시·군·구 선택 지도 단계가 없습니다.
+    if is_single_tier_local_authority(sido):
+        st.info("세종특별자치시는 광역자치단체와 기초자치단체가 분리되지 않는 단층제입니다. 별도의 시·군·구 경계 선택 없이 상세 화면으로 이동합니다.")
+        with st.container(border=True):
+            st.markdown("### 세종특별자치시")
+            st.caption("광역자치단체(단층제) · 별도 기초자치단체 없음")
+            if st.button("세종특별자치시 상세 보기", key="sejong_single_tier_detail", type="primary", use_container_width=True):
+                _select_sigungu(sido, st.session_state.get("local_sido_feature"))
+                st.rerun()
+        st.divider()
+        st.markdown(f"### {sido} 광역자치단체 기본 정보")
+        render_region_statistics(sido, st.session_state.get("local_sido_feature"), "광역자치단체", parent=True)
+        _region_data_tools(sido, "광역자치단체", st.session_state.get("local_sido_feature"))
+        return
+
     geo, message = _ensure_local_map("시군구")
     if message:
         st.warning(message)
+    candidates = get_local_region_names(sido)
+    feature_by_region = {}
     if geo and HAS_MAP:
         if geo.get("_truncated_notice"):
             st.warning(geo["_truncated_notice"])
         selected, feature = _render_local_map(geo, "시군구", f"local_sigungu_map_final_{st.session_state.get('local_selected_sido_code', 'none')}", 9)
         if selected:
-            _select_sigungu(selected, feature)
-            st.rerun()
-        fields = ("sig_kor_nm", "SIG_KOR_NM", "sig_nm", "sigungu_nm", "name", "NAME")
-        names = [region_property(f, fields) for f in geo.get("features", [])]
-        names = [name for name in names if name != "이름 정보 없음"]
-        if names:
-            choice = st.selectbox("지도에서 선택하기 어려우면 시·군·구를 목록에서 선택하세요.", ["선택하세요"] + names, key=f"final_sigungu_choice_{st.session_state.get('local_selected_sido_code', 'none')}")
-            if choice != "선택하세요" and st.button("선택한 기초자치단체 상세 보기", key="final_sigungu_next", type="primary"):
-                feature = next((f for f in geo.get("features", []) if region_property(f, fields) == choice), None)
-                _select_sigungu(choice, feature)
+            canonical = match_local_codebook_name(sido, selected)
+            if canonical:
+                _select_sigungu(canonical, feature)
                 st.rerun()
-    else:
-        st.info("시·군·구 경계 데이터를 불러오지 못했습니다. 통계·지도 대신 지역명을 직접 선택해 일반 조직도 예시를 볼 수 있습니다.")
-        manual_name = st.text_input("기초자치단체 이름", placeholder="예: 수원시")
-        if st.button("입력한 지역 상세 보기", disabled=not manual_name.strip(), type="primary"):
-            _select_sigungu(manual_name.strip(), None)
+            else:
+                st.warning(f"지도에서 선택한 '{selected}'은 지역코드_연계표.xlsx의 현행 자치단체 목록과 일치하지 않습니다. 일반구 또는 개편 전 명칭일 수 있습니다.")
+        configured_name_field = lookup_vworld_name_field("lt_c_adsigg_info")
+        fields = tuple([configured_name_field] if configured_name_field else []) + ("sig_kor_nm", "SIG_KOR_NM", "sig_nm", "sigungu_nm", "name", "NAME")
+        for map_feature in geo.get("features", []):
+            map_name = region_property(map_feature, fields)
+            canonical = match_local_codebook_name(sido, map_name)
+            if canonical:
+                feature_by_region[canonical] = map_feature
+        missing = [name for name in candidates if name not in feature_by_region]
+        if missing:
+            st.warning("엑셀에는 있지만 현재 VWorld 시군구 응답에서 경계를 찾지 못한 지역: " + ", ".join(missing) + ". 지도 경계 자료가 최신 개편을 반영하는지 확인하세요.")
+        choices = ["선택하세요"] + candidates
+        choice = st.selectbox("기초자치단체 선택", choices, key=f"codebook_sigungu_choice_{_region_widget_token('광역자치단체', sido)}")
+        if choice != "선택하세요" and st.button("선택한 지역 상세 보기", key="codebook_sigungu_next", type="primary"):
+            _select_sigungu(choice, feature_by_region.get(choice))
             st.rerun()
+    else:
+        if not candidates:
+            st.warning("지역코드_연계표.xlsx에서 이 광역자치단체의 기초자치단체 이름을 찾지 못했습니다. 엑셀의 광역_기초목록 시트를 확인해 주세요.")
+        else:
+            st.info("VWorld 경계를 불러오지 못해 엑셀의 현행 지역명 목록을 사용합니다. 지도 면적 계산은 경계가 연결되기 전까지 제공되지 않습니다.")
+            choice = st.selectbox("기초자치단체 선택", ["선택하세요"] + candidates, key=f"manual_codebook_sigungu_{_region_widget_token('광역자치단체', sido)}")
+            if choice != "선택하세요" and st.button("선택한 지역 상세 보기", key="manual_codebook_sigungu_next", type="primary"):
+                _select_sigungu(choice, None)
+                st.rerun()
 
     st.divider()
     st.markdown(f"### {sido} 광역자치단체 기본 정보")
     render_region_statistics(sido, st.session_state.get("local_sido_feature"), "광역자치단체", parent=True)
     _region_data_tools(sido, "광역자치단체", st.session_state.get("local_sido_feature"))
-    st.caption("위 통계는 선택한 광역자치단체 기준입니다. 아래 지도에서 기초자치단체를 선택하면 별도 상세 화면으로 이동합니다.")
-
+    st.caption("위 통계는 선택한 광역자치단체 기준입니다. 아래 지도 또는 엑셀의 지역명 목록에서 기초자치단체를 선택하면 별도 상세 화면으로 이동합니다.")
 
 def render_local_detail():
     sido = st.session_state.get("local_selected_sido", "")
@@ -3294,37 +3847,58 @@ def render_local_detail():
         st.session_state.page = "지방정부 시군구"
         st.rerun()
 
+    detail_row = find_region_codebook_row(sido, sigungu, step="기초") or find_region_codebook_row(sido, sigungu) or {}
+    region_type = str(detail_row.get("행정구역유형", "기초자치단체")).strip()
+    is_admin_city = region_type == "행정시"
+    is_single_tier = region_type == "특별자치시(단층제)"
+    badge_text = "행정시" if is_admin_city else "광역자치단체(단층제)" if is_single_tier else "기초자치단체"
+    statistics_level = "광역자치단체" if is_single_tier else "기초자치단체"
     with st.container(border=True):
         title_col, badge_col = st.columns([4, 1])
         with title_col:
             st.markdown(f"### {sigungu}")
         with badge_col:
-            st.markdown("<div style='text-align:right'><span style='background:var(--secondary-background-color);padding:4px 9px;border-radius:20px'>기초자치단체</span></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align:right'><span style='background:var(--secondary-background-color);padding:4px 9px;border-radius:20px'>{html.escape(badge_text)}</span></div>", unsafe_allow_html=True)
         st.markdown("<div style='text-align:center;font-weight:800;font-size:1.05rem'>지역 기본 정보</div>", unsafe_allow_html=True)
         st.caption("면적 · 주민등록인구 · 인구밀도 · 출생아 수 · 합계출산율 · 고령인구 · 청년인구")
-        render_region_statistics(sigungu, st.session_state.get("local_sigungu_feature"), "기초자치단체")
+        render_region_statistics(sigungu, st.session_state.get("local_sigungu_feature"), statistics_level)
         st.divider()
         left, right = st.columns(2, gap="small")
         with left:
             st.markdown("### 지방 행정부")
-            render_node("시장·군수·구청장", "지방자치단체의 장 · 집행기관", "local_mayor", "local_executive", "지방정부 상세", "🏢")
+            leader_label = "세종특별자치시장" if is_single_tier else "시장·군수·구청장"
+            leader_role = "광역자치단체의 장 · 집행기관" if is_single_tier else "지방자치단체의 장 · 집행기관"
+            render_node(leader_label, leader_role, "local_mayor", "local_executive", "지방정부 상세", "🏢")
             st.markdown('<div class="org-arrow">↓</div>', unsafe_allow_html=True)
             render_node("부단체장", "부시장·부군수·부구청장 등", "local_deputy", "local_executive", "지방정부 상세")
             st.markdown('<div class="org-arrow">↓</div>', unsafe_allow_html=True)
             render_node("실·국·본부", "정책 분야별 행정조직", "local_bureaus", "local_executive", "지방정부 상세")
             st.caption("과·담당관 등 하부조직은 지자체별 직제에 따라 달라집니다.")
         with right:
-            st.markdown("### 지방 의회")
-            render_node("시·군·구의회", "지역 주민 대표 · 의결기관", "local_council_root", "local_council", "지방정부 상세", "🏛️")
-            st.markdown('<div class="org-arrow">↓</div>', unsafe_allow_html=True)
-            render_node("의장단·상임위원회", "의장·부의장 · 소관 분야 심사", "local_committee", "local_council", "지방정부 상세")
-            st.markdown('<div class="org-arrow">↓</div>', unsafe_allow_html=True)
-            render_node("의회사무국·사무과", "의정활동 및 의회 운영 지원", "local_council_office", "local_council", "지방정부 상세")
-            st.caption("실제 위원회·사무조직 편제는 지역별로 다릅니다.")
+            if is_admin_city:
+                st.markdown("### 광역 지방 의회")
+                st.markdown("**제주특별자치도의회**")
+                st.caption("제주시·서귀포시는 행정시이므로 별도의 기초자치단체 의회가 없습니다. 지방의회는 제주특별자치도 단위로 구성됩니다.")
+            elif is_single_tier:
+                st.markdown("### 지방 의회")
+                render_node("세종특별자치시의회", "광역자치단체의 지방의회 · 의결기관", "local_council_root", "local_council", "지방정부 상세", "🏛️")
+                st.markdown('<div class="org-arrow">↓</div>', unsafe_allow_html=True)
+                render_node("의장단·상임위원회", "의장·부의장 · 소관 분야 심사", "local_committee", "local_council", "지방정부 상세")
+                st.markdown('<div class="org-arrow">↓</div>', unsafe_allow_html=True)
+                render_node("의회사무처", "의정활동 및 의회 운영 지원", "local_council_office", "local_council", "지방정부 상세")
+                st.caption("세종특별자치시의회는 단층제 광역자치단체의 의회입니다.")
+            else:
+                st.markdown("### 지방 의회")
+                render_node("시·군·구의회", "지역 주민 대표 · 의결기관", "local_council_root", "local_council", "지방정부 상세", "🏛️")
+                st.markdown('<div class="org-arrow">↓</div>', unsafe_allow_html=True)
+                render_node("의장단·상임위원회", "의장·부의장 · 소관 분야 심사", "local_committee", "local_council", "지방정부 상세")
+                st.markdown('<div class="org-arrow">↓</div>', unsafe_allow_html=True)
+                render_node("의회사무국·사무과", "의정활동 및 의회 운영 지원", "local_council_office", "local_council", "지방정부 상세")
+                st.caption("실제 위원회·사무조직 편제는 지역별로 다릅니다.")
         st.caption(f"{sigungu}의 실제 조직도를 그대로 복제한 것이 아니라, 지방 행정부와 지방 의회를 구분해 보여 주는 일반 구조 예시입니다.")
 
     st.divider()
-    _region_data_tools(sigungu, "기초자치단체", st.session_state.get("local_sigungu_feature"))
+    _region_data_tools(sigungu, statistics_level, st.session_state.get("local_sigungu_feature"))
     st.link_button("지방자치·행정안전부 공식 자료", "https://www.mois.go.kr/")
 
 
