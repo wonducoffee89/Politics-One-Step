@@ -15,38 +15,23 @@ Streamlit 메인 앱
 
 Streamlit Community Cloud > App settings > Secrets
 [API_KEYS]
-ASSEMBLY_MEMBER_KEY = "열린국회정보 공통 인증키 (세 API 동일값)"
-ASSEMBLY_VOTE_KEY = "열린국회정보 공통 인증키 (세 API 동일값)"
-ASSEMBLY_SCHEDULE_KEY = "열린국회정보 공통 인증키 (세 API 동일값)"
-NEC_WINNER_KEY = "중앙선거관리위원회 당선인 정보 전용 인증키"
-NEC_CANDIDATE_KEY = "중앙선거관리위원회 후보자 통합검색 전용 인증키"
-MOIS_BENEFIT_KEY = "행정안전부 공공서비스 정보 전용 인증키"
-MOIS_STAFF_KEY = "행정안전부 기관별 공무원 정원 전용 인증키"
-MOIS_SUBORG_KEY = "행정안전부 중앙행정기관 하부기구 전용 인증키"
-MOIS_COUNCIL_KEY = "행정안전부 지방의회의원 정수 전용 인증키"
-MOIS_POPULATION_KEY = "행정안전부 행정동별 주민등록 인구 전용 인증키"
-KOSIS_KEY = "KOSIS 공유서비스 전용 인증키"
-VWORLD_KEY = "VWorld 행정구역도 전용 인증키"
+ASSEMBLY_KEY = "열린국회정보 공통 인증키"
+DATA_GO_KR_KEY = "공공데이터포털 개인 인증키 (선거 2 + 행안부 5개 API 공통)"
+KOSIS_KEY = "KOSIS 인증키"
+VWORLD_KEY = "VWorld 인증키"
 
 [APP]
 VWORLD_DOMAIN = "https://실제-배포된-앱-주소"
 
-선택 설정(실제 활용가이드에서 확인한 값만 입력)
-[API_URLS]
-ASSEMBLY_SCHEDULE = "국회일정 통합 API 상세 요청 주소"
-MOIS_COUNCIL_SEATS = "지방의회의원 정수 API 상세 요청 주소"
-
-[API_CODES]
-ASSEMBLY_SCHEDULE = "국회일정 통합 API 코드"
-
 중요:
-- API 서비스는 12개이며 Secrets 변수명도 12개입니다.
-- 국회사무처의 국회의원 정보·본회의 표결·국회일정 3개 API는 동일한 열린국회정보 키를 공유하므로 세 항목에 같은 값을 입력합니다.
-- 나머지 9개 API는 각각 해당 서비스에서 발급받은 키를 입력합니다.
-- 인증키는 이 코드나 GitHub 저장소에 넣지 않습니다.
-- 확인되지 않은 상세 요청 주소·요청변수는 임의로 만들어 호출하지 않습니다.
-- 정부디렉터리시스템 표준 API는 신청 대기 중이므로 현재 12개 목록에 포함하지 않습니다.
-- API 응답 실패는 해당 자료 영역에만 표시하고 앱 전체는 계속 작동합니다.
+- 승인된 12개 API 서비스는 발급처별 공통 인증키 4개로 관리합니다.
+- 국회사무처 3개 API는 ASSEMBLY_KEY 하나를 공유합니다.
+- 중앙선거관리위원회 2개와 행정안전부 5개 API는 DATA_GO_KR_KEY 하나를 공유합니다.
+- KOSIS와 VWorld는 각각 별도 키를 사용합니다.
+- 요청 주소와 API 매개변수는 코드의 API_ITEMS 및 API 어댑터에 정의합니다.
+- 실제 인증키는 코드나 GitHub에 저장하지 않습니다.
+- 정부디렉터리시스템 표준 API는 신청 대기 중이므로 사용하지 않습니다.
+- API 오류는 해당 영역에만 표시하고 앱 전체는 계속 작동합니다.
 """
 
 from __future__ import annotations
@@ -101,6 +86,8 @@ BASE_DIR = Path(__file__).resolve().parent
 QUIZ_PATH = BASE_DIR / "Quiz.txt"
 NEWS_PATH = BASE_DIR / "NEWS.txt"
 REGION_CODEBOOK_PATH = BASE_DIR / "지역코드_연계표.xlsx"
+# 친구가 만든 Streamlit 앱 주소를 나중에 이 변수에 넣으면 시뮬레이션 화면에 삽입됩니다.
+SIMULATION_APP_URL = ""
 KST = ZoneInfo("Asia/Seoul")
 
 def korea_now() -> datetime:
@@ -150,6 +137,60 @@ st.markdown(
     div[data-testid="stMetric"] {border:1px solid var(--border-color, #dedede); border-radius:12px; padding:.7rem;}
     div[data-testid="stSidebar"] {min-width:250px;}
     .tiny-note {font-size:.82rem; color:var(--secondary-text-color);}
+
+    :root {
+      --pastel-blue:#EAF4FF; --pastel-sky:#E7F7FB; --pastel-pink:#FFF0F5;
+      --pastel-orange:#FFF3E8; --pastel-yellow:#FFF9DF; --pastel-green:#EAF7EF;
+      --pastel-purple:#F2EEFF; --pastel-mint:#E7F7F2;
+    }
+    .app-header {background:linear-gradient(100deg,#F0F7FF 0%,#FFF5F0 50%,#F8F1FF 100%);border-radius:18px;padding:1rem 1.15rem;}
+    .quiz-panel {background:linear-gradient(135deg,#F1F7FF,#FFF8F1);border-color:#DCE8F5;}
+    .pastel-card {border:1px solid #E2E7EF;border-radius:14px;padding:.9rem;background:#FCFDFF;margin:.35rem 0;}
+    .pastel-icon {display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:14px;font-size:1.55rem;margin-right:.65rem;vertical-align:middle;}
+    .pastel-icon.blue{background:var(--pastel-blue)} .pastel-icon.sky{background:var(--pastel-sky)}
+    .pastel-icon.pink{background:var(--pastel-pink)} .pastel-icon.orange{background:var(--pastel-orange)}
+    .pastel-icon.yellow{background:var(--pastel-yellow)} .pastel-icon.green{background:var(--pastel-green)}
+    .pastel-icon.purple{background:var(--pastel-purple)} .pastel-icon.mint{background:var(--pastel-mint)}
+    .news-card {background:linear-gradient(120deg,#FFFFFF,#F9FBFF);border-color:#E4EAF2;}
+    .news-card .publisher-mark {display:inline-flex;align-items:center;gap:.35rem;color:#657184;font-size:.78rem;font-weight:650;margin-bottom:.3rem;}
+    .news-card .publisher-mark img {width:20px;height:20px;object-fit:contain;border-radius:6px;background:#fff;padding:2px;border:1px solid #E8EDF3;}
+    .news-card .publisher-fallback {width:20px;height:20px;align-items:center;justify-content:center;font-size:1rem;}
+    .api-card {background:linear-gradient(140deg,#FFFFFF,#F8FBFF);border-color:#E2E8F0;min-height:160px;}
+    .api-group-heading {display:flex;align-items:center;gap:.8rem;margin:.2rem 0 .7rem;}
+    .api-group-heading img {width:48px;height:48px;object-fit:contain;padding:5px;border-radius:14px;background:#F5F8FC;border:1px solid #E6EBF2;}
+    .api-group-heading .subtitle {font-size:.78rem;color:#87909D;font-weight:500;margin-left:.5rem;}
+    .api-card-title {font-size:.98rem;}
+    .quiz-feedback {border-radius:14px;padding:.85rem 1rem;margin:.65rem 0;border:1px solid #DCE6F0;background:#F7FAFF;}
+    .sidebar-section-label {font-weight:800;font-size:.96rem;padding:.65rem .35rem .3rem;margin-top:.2rem;border-top:1px solid #E7EAF0;color:#46546A;}
+    div[data-testid="stSidebar"] button {border-radius:12px;min-height:2.45rem;}
+    div[data-testid="stButton"] > button {background:#F7FAFD!important;border:1px solid #E1E8F0!important;color:#33465B!important;border-radius:12px;transition:transform .12s ease, box-shadow .12s ease;white-space:pre-wrap;line-height:1.45;}
+    div[data-testid="stLinkButton"] > a {background:#F7F4FF!important;border:1px solid #E6DFF7!important;color:#51466F!important;border-radius:12px;}
+    div[class*="st-key-softbutton-blue"] div[data-testid="stButton"] > button {background:#EAF4FF!important;border-color:#D4E7FB!important;color:#234A70!important;}
+    div[class*="st-key-softbutton-sky"] div[data-testid="stButton"] > button {background:#E7F7FB!important;border-color:#CDECF2!important;color:#285B66!important;}
+    div[class*="st-key-softbutton-pink"] div[data-testid="stButton"] > button {background:#FFF0F5!important;border-color:#F6DCE7!important;color:#74465A!important;}
+    div[class*="st-key-softbutton-orange"] div[data-testid="stButton"] > button {background:#FFF3E8!important;border-color:#F4E0CD!important;color:#765334!important;}
+    div[class*="st-key-softbutton-yellow"] div[data-testid="stButton"] > button {background:#FFF9DF!important;border-color:#F1E9C5!important;color:#75652B!important;}
+    div[class*="st-key-softbutton-green"] div[data-testid="stButton"] > button {background:#EAF7EF!important;border-color:#D4EBDD!important;color:#315E42!important;}
+    div[class*="st-key-softbutton-purple"] div[data-testid="stButton"] > button {background:#F2EEFF!important;border-color:#E1DBF8!important;color:#55477B!important;}
+    div[class*="st-key-softbutton-mint"] div[data-testid="stButton"] > button {background:#E7F7F2!important;border-color:#CFECE2!important;color:#315F51!important;}
+    div[data-testid="stButton"] > button:hover, div[data-testid="stLinkButton"] > a:hover {transform:translateY(-1px);box-shadow:0 3px 10px rgba(60,80,110,.10);}
+    .publisher-shortcut {border:1px solid #E7EAF0;border-radius:13px;padding:.55rem .45rem;background:#FBFCFE;text-align:center;min-height:100px;}
+    .publisher-shortcut img {width:30px;height:30px;object-fit:contain;background:#fff;border:1px solid #E7EBF1;border-radius:8px;padding:3px;}
+    .publisher-shortcut .publisher-fallback {width:30px;height:30px;align-items:center;justify-content:center;font-size:1.35rem;}
+    .publisher-shortcut .name {font-size:.82rem;font-weight:700;color:#526174;margin:.25rem 0 .35rem;}
+    div[class*="st-key-news-publisher-blue"] div[data-testid="stLinkButton"] > a {background:#EAF4FF!important;border-color:#D4E7FB!important;color:#234A70!important;}
+    div[class*="st-key-news-publisher-sky"] div[data-testid="stLinkButton"] > a {background:#E7F7FB!important;border-color:#CDECF2!important;color:#285B66!important;}
+    div[class*="st-key-news-publisher-pink"] div[data-testid="stLinkButton"] > a {background:#FFF0F5!important;border-color:#F6DCE7!important;color:#74465A!important;}
+    div[class*="st-key-news-publisher-orange"] div[data-testid="stLinkButton"] > a {background:#FFF3E8!important;border-color:#F4E0CD!important;color:#765334!important;}
+    div[class*="st-key-news-publisher-yellow"] div[data-testid="stLinkButton"] > a {background:#FFF9DF!important;border-color:#F1E9C5!important;color:#75652B!important;}
+    div[class*="st-key-news-publisher-green"] div[data-testid="stLinkButton"] > a {background:#EAF7EF!important;border-color:#D4EBDD!important;color:#315E42!important;}
+    div[class*="st-key-news-publisher-purple"] div[data-testid="stLinkButton"] > a {background:#F2EEFF!important;border-color:#E1DBF8!important;color:#55477B!important;}
+    .api-group-logo {display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:15px;background:#F7FAFD;border:1px solid #E3EAF2;overflow:hidden;}
+    .api-group-logo img {width:38px;height:38px;object-fit:contain;}
+    .api-group-logo .fallback {font-size:1.8rem;line-height:1;}
+    .quiz-feedback.correct {background:#EDF8F0;border-color:#D5EBDD;}
+    .quiz-feedback.incorrect {background:#FFF1F3;border-color:#F1D9DE;}
+    .news-control {background:#F8FAFD;border:1px solid #E5EAF1;border-radius:12px;padding:.5rem .65rem;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -181,46 +222,29 @@ def _is_placeholder(value: str) -> bool:
     text = str(value or "").strip().lower()
     if not text:
         return True
-    markers = ("인증키", "전용키", "여기에_", "실제-배포", "실제 도메인", "상세 요청 주소", "api 코드", "<", ">", "placeholder")
+    markers = ("인증키", "전용키", "여기에_", "실제-배포", "실제 도메인", "placeholder", "your_")
     return any(marker in text for marker in markers)
 
 
-# 국회사무처의 세 API는 열린국회정보에서 발급한 하나의 인증키를 공유합니다.
-# Secrets 항목 이름은 세 개로 분리하되, 실제 값은 같은 키를 복사해 입력할 수 있습니다.
-SHARED_API_KEY_GROUPS = (
-    frozenset({"ASSEMBLY_MEMBER_KEY", "ASSEMBLY_VOTE_KEY", "ASSEMBLY_SCHEDULE_KEY"}),
-)
-
-
-def _api_keys_may_share_value(first_name: str, second_name: str) -> bool:
-    return any(first_name in group and second_name in group for group in SHARED_API_KEY_GROUPS)
-
+API_PROVIDER_KEY_NAMES = ("ASSEMBLY_KEY", "DATA_GO_KR_KEY", "KOSIS_KEY", "VWORLD_KEY")
 
 def api_key_status(key_name: str) -> str:
-    """키 값을 노출하지 않고 미등록·중복·등록됨 상태를 반환합니다.
-
-    국회사무처 세 API 사이의 동일 키는 정상입니다. 다른 API 그룹과의 중복은 계속 차단합니다.
-    """
+    """네 발급처별 인증키 중 해당 키가 등록되었는지 확인합니다."""
     value = get_secret("API_KEYS", key_name)
     if _is_placeholder(value):
         return "미등록"
-    known_names = globals().get("API_KEY_NAMES", {})
-    duplicate_names = []
-    for other_name in known_names.values():
+    for other_name in API_PROVIDER_KEY_NAMES:
         if other_name == key_name:
             continue
         other_value = get_secret("API_KEYS", other_name)
-        if not other_value or other_value != value:
-            continue
-        if _api_keys_may_share_value(key_name, other_name):
-            continue
-        duplicate_names.append(other_name)
-    return "중복" if duplicate_names else "등록됨"
+        if not _is_placeholder(other_value) and other_value == value:
+            return "중복"
+    return "등록됨"
 
 
 def api_key(key_name: str) -> str:
-    """정상 등록된 키를 반환합니다. 국회사무처의 승인된 키 공유는 허용합니다."""
-    if api_key_status(key_name) != "등록됨":
+    """발급처별 공통 인증키를 반환합니다."""
+    if key_name not in API_PROVIDER_KEY_NAMES or api_key_status(key_name) != "등록됨":
         return ""
     return get_secret("API_KEYS", key_name)
 
@@ -228,29 +252,12 @@ def api_key(key_name: str) -> str:
 def api_key_error_message(key_name: str) -> str:
     status = api_key_status(key_name)
     if status == "중복":
-        return (f"Streamlit Secrets의 API_KEYS.{key_name} 값이 다른 API 서비스의 키와 중복됩니다. "
-                "국회사무처 세 API끼리만 같은 키를 사용할 수 있습니다.")
-    return f"Streamlit Secrets의 API_KEYS.{key_name}에 해당 API 인증키를 등록해 주세요."
+        return f"Streamlit Secrets의 API_KEYS.{key_name} 값이 다른 발급처 키와 중복됩니다. 발급처별 키 네 개가 서로 올바른지 확인해 주세요."
+    return f"Streamlit Secrets의 API_KEYS.{key_name}에 해당 발급처 인증키를 등록해 주세요."
 
 
 def api_key_is_configured(key_name: str) -> bool:
-    """중복되지 않은 전용 키가 등록되어 있는지만 반환합니다."""
     return api_key_status(key_name) == "등록됨"
-
-
-def api_url(url_name: str, default: str = "") -> str:
-    value = get_secret("API_URLS", url_name, default)
-    if _is_placeholder(value):
-        return ""
-    parsed = urlsplit(value)
-    if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
-        return ""
-    return value
-
-
-def api_code(code_name: str, default: str = "") -> str:
-    value = get_secret("API_CODES", code_name, default)
-    return "" if _is_placeholder(value) else value
 
 
 def safe_string(value, fallback="정보 없음") -> str:
@@ -699,19 +706,19 @@ def load_quiz_file(modified_at: float):
 
 SAMPLE_NEWS_TEXT = """# 형식: 국내|언론사|RSS주소 또는 국제|언론사|RSS주소
 # 아래 13개 주소만 기본 등록되어 있습니다. 새 RSS를 추가할 때만 직접 줄을 추가하세요.
-국내|KBS 세계|http://world.kbs.co.kr/rss/rss_news.htm?lang=k
-국내|KBS 뉴스|https://news.kbs.co.kr/rss/news.xml
-국내|연합뉴스 정치|https://www.yna.co.kr/rss/politics.xml
-국제|연합뉴스 국제|https://www.yna.co.kr/rss/international.xml
-국내|연합뉴스 종합|https://www.yna.co.kr/rss/news.xml
-국제|BBC World|http://feeds.bbci.co.uk/news/world/rss.xml
-국제|BBC Politics|http://feeds.bbci.co.uk/news/politics/rss.xml
-국제|CNN World|http://rss.cnn.com/rss/edition_world.rss
-국제|CNN Politics|http://rss.cnn.com/rss/cnn_allpolitics.rss
-국제|Reuters World|https://www.reuters.com/arc/outboundfeeds/rss/world/
+국내|KBS|http://world.kbs.co.kr/rss/rss_news.htm?lang=k
+국내|KBS|https://news.kbs.co.kr/rss/news.xml
+국내|연합뉴스|https://www.yna.co.kr/rss/politics.xml
+국제|연합뉴스|https://www.yna.co.kr/rss/international.xml
+국내|연합뉴스|https://www.yna.co.kr/rss/news.xml
+국제|BBC|http://feeds.bbci.co.uk/news/world/rss.xml
+국제|BBC|http://feeds.bbci.co.uk/news/politics/rss.xml
+국제|CNN|http://rss.cnn.com/rss/edition_world.rss
+국제|CNN|http://rss.cnn.com/rss/cnn_allpolitics.rss
+국제|Reuters|https://www.reuters.com/arc/outboundfeeds/rss/world/
 국제|AP|https://feedx.net/rss/ap.xml
-국제|AFP|https://www.afp.com/en/actus/afp_communique/all/feed
-국제|France24·AFP|https://www.france24.com/en/rss
+국제|AFP·France24|https://www.afp.com/en/actus/afp_communique/all/feed
+국제|AFP·France24|https://www.france24.com/en/rss
 """
 
 
@@ -857,6 +864,8 @@ def collect_all_news():
             try:
                 for article in future.result():
                     article["publisher"] = source["publisher"]
+                    article["region"] = source["region"]
+                    article["feed_url"] = source["url"]
                     grouped[source["region"]].append(article)
             except Exception as exc:
                 errors[source["region"]].append(f"{source['publisher']}: 피드 수신에 실패했습니다 ({safe_exception_category(exc)}).")
@@ -881,38 +890,32 @@ def collect_news(region: str):
     return grouped.get(region, []), errors.get(region, [])
 
 # ============================================================
-# 5. 12개 API 카탈로그와 API별 호출 어댑터
+# 5. 12개 API 카탈로그와 발급처별 공통 인증키 호출 어댑터
 # ============================================================
 
 API_GROUPS = [
     {
-        "id": "assembly", "name": "입법부 · 국회", "icon": "🏛️",
-        "description": "국회의원·본회의 표결·국회 일정",
+        "id": "assembly", "name": "국회 정보", "icon": "🏛️", "subtitle": "입법부 · 국회사무처", "logo": "https://assembly.go.kr/",
         "items": ["member", "vote", "schedule"],
     },
     {
-        "id": "election", "name": "선거 · 중앙선거관리위원회", "icon": "🗳️",
-        "description": "당선인·후보자·선거구 정보",
+        "id": "election", "name": "선거 정보", "icon": "🗳️", "subtitle": "중앙선거관리위원회", "logo": "https://www.nec.go.kr/",
         "items": ["winner", "candidate"],
     },
     {
-        "id": "government", "name": "행정부 · 행정안전부", "icon": "🏢",
-        "description": "공공서비스·기관별 공무원·중앙행정기관 하부기구",
+        "id": "government", "name": "정부 정보", "icon": "🏢", "subtitle": "행정부 · 행정안전부", "logo": "https://www.mois.go.kr/",
         "items": ["benefit", "staff", "suborg"],
     },
     {
-        "id": "local", "name": "지방행정 · 행정안전부", "icon": "🗺️",
-        "description": "지방의회 정수·주민등록 인구",
+        "id": "local", "name": "지방정부 정보", "icon": "🗺️", "subtitle": "지방행정 · 행정안전부", "logo": "https://www.mois.go.kr/",
         "items": ["council", "population"],
     },
     {
-        "id": "statistics", "name": "국가통계 · 국가데이터처", "icon": "📊",
-        "description": "KOSIS 지역·사회 지표 통계",
+        "id": "statistics", "name": "국가 통계", "icon": "📊", "subtitle": "국가데이터처 · KOSIS", "logo": "https://kosis.kr/",
         "items": ["kosis"],
     },
     {
-        "id": "map", "name": "공간정보 · 국토교통부", "icon": "📍",
-        "description": "브이월드 WMTS 배경지도·WFS 행정구역 경계",
+        "id": "map", "name": "공간정보", "icon": "🌐", "subtitle": "국토교통부 · VWorld", "logo": "https://www.vworld.kr/",
         "items": ["vworld"],
     },
 ]
@@ -921,7 +924,7 @@ API_ITEMS = {
     "member": {
         "title": "국회의원 정보 통합 API", "short": "국회의원",
         "description": "국회의원 이름·정당·지역구 등 기본 정보를 조회합니다.",
-        "group": "국회", "key": "ASSEMBLY_MEMBER_KEY",
+        "group": "국회", "key": "ASSEMBLY_KEY",
         "url": "https://open.assembly.go.kr/portal/openapi/ALLNAMEMBER",
         "status": "요청 주소 확인",
         "source_url": "https://open.assembly.go.kr/",
@@ -929,7 +932,7 @@ API_ITEMS = {
     "vote": {
         "title": "국회의원 본회의 표결정보", "short": "본회의 표결",
         "description": "국회의원의 본회의 안건별 찬성·반대·기권 등 표결 자료입니다.",
-        "group": "국회", "key": "ASSEMBLY_VOTE_KEY",
+        "group": "국회", "key": "ASSEMBLY_KEY",
         "url": "https://open.assembly.go.kr/portal/openapi/nojepdqqaweusdfbi",
         "status": "국회 대수·의안 ID 입력 필요",
         "source_url": "https://open.assembly.go.kr/",
@@ -937,15 +940,15 @@ API_ITEMS = {
     "schedule": {
         "title": "국회일정 통합 API", "short": "국회일정",
         "description": "본회의·위원회 일정과 의정활동 일정을 조회합니다.",
-        "group": "국회", "key": "ASSEMBLY_SCHEDULE_KEY",
-        "url": "",
-        "status": "상세 API 코드 확인 필요",
+        "group": "국회", "key": "ASSEMBLY_KEY",
+        "url": "https://open.assembly.go.kr/portal/openapi/ALLSCHEDULE",
+        "status": "공식 국회일정 통합 API 코드 ALLSCHEDULE 사용",
         "source_url": "https://open.assembly.go.kr/",
     },
     "winner": {
         "title": "중앙선거관리위원회 당선인 정보", "short": "당선인",
         "description": "선거 ID와 선거 종류, 시도·선거구를 지정해 당선인 정보를 조회합니다.",
-        "group": "선거", "key": "NEC_WINNER_KEY",
+        "group": "선거", "key": "DATA_GO_KR_KEY",
         "url": "https://apis.data.go.kr/9760000/WinnerInfoInqireService2/getWinnerInfoInqire",
         "status": "요청 주소 확인",
         "source_url": "https://www.data.go.kr/data/15000864/openapi.do",
@@ -953,7 +956,7 @@ API_ITEMS = {
     "candidate": {
         "title": "중앙선거관리위원회 후보자 통합검색", "short": "후보자",
         "description": "후보자 이름을 기준으로 후보 이력과 기본 정보를 검색합니다.",
-        "group": "선거", "key": "NEC_CANDIDATE_KEY",
+        "group": "선거", "key": "DATA_GO_KR_KEY",
         "url": "https://apis.data.go.kr/9760000/CndaSrchService/getCndaSrchInqire",
         "status": "공식 이름 검색변수 name 반영",
         "source_url": "https://www.data.go.kr/data/15140045/openapi.do",
@@ -961,7 +964,7 @@ API_ITEMS = {
     "benefit": {
         "title": "행정안전부 공공서비스(혜택) 정보", "short": "공공서비스",
         "description": "중앙부처·지자체 등이 제공하는 공공서비스 목록과 상세 정보입니다.",
-        "group": "행정부", "key": "MOIS_BENEFIT_KEY",
+        "group": "행정부", "key": "DATA_GO_KR_KEY",
         "url": "https://api.odcloud.kr/api/gov24/v3/serviceList",
         "status": "정부24 공공서비스 목록 API 연결",
         "source_url": "https://www.data.go.kr/data/15113968/openapi.do",
@@ -969,7 +972,7 @@ API_ITEMS = {
     "staff": {
         "title": "행정안전부 기관별 공무원 정원", "short": "공무원 정원",
         "description": "기준연도와 기관별 공무원 정원 통계를 확인합니다.",
-        "group": "행정부", "key": "MOIS_STAFF_KEY",
+        "group": "행정부", "key": "DATA_GO_KR_KEY",
         "url": "https://apis.data.go.kr/1741000/FixedNumberCivilServantsOrg/getFixedNumberCivilServantsOrgList",
         "status": "요청 주소 확인",
         "source_url": "https://www.data.go.kr/data/15077900/openapi.do",
@@ -977,7 +980,7 @@ API_ITEMS = {
     "suborg": {
         "title": "행정안전부 중앙행정기관별 하부기구", "short": "중앙기관 하부기구",
         "description": "중앙행정기관의 보조·보좌기관 관련 통계를 확인합니다.",
-        "group": "행정부", "key": "MOIS_SUBORG_KEY",
+        "group": "행정부", "key": "DATA_GO_KR_KEY",
         "url": "https://apis.data.go.kr/1741000/SubOrganEachCenterExecutive/getSubOrganEachCenterExecutive",
         "status": "요청 주소 확인",
         "source_url": "https://www.data.go.kr/data/15107327/openapi.do",
@@ -985,15 +988,15 @@ API_ITEMS = {
     "council": {
         "title": "행정안전부 기수별 지방의회의원 정수", "short": "지방의회 정수",
         "description": "지방의회의 기수별·유형별 의원 정수 통계입니다. 퀴즈가 아닌 지역 정보에 사용합니다.",
-        "group": "지방행정", "key": "MOIS_COUNCIL_KEY",
-        "url": "",
-        "status": "상세 요청 주소 확인 필요",
+        "group": "지방행정", "key": "DATA_GO_KR_KEY",
+        "url": "https://apis.data.go.kr/1741000/NumberLocalCouncilMemberNumber/getNumberLocalCouncilMemberNumber",
+        "status": "공식 getNumberLocalCouncilMemberNumber 사용",
         "source_url": "https://www.data.go.kr/data/15107372/openapi.do",
     },
     "population": {
         "title": "행정안전부 행정동별 주민등록 인구 및 세대현황", "short": "주민등록 인구",
         "description": "행정구역·통계년월별 인구와 세대 현황을 확인합니다.",
-        "group": "지방행정", "key": "MOIS_POPULATION_KEY",
+        "group": "지방행정", "key": "DATA_GO_KR_KEY",
         "url": "https://apis.data.go.kr/1741000/admmPpltnHhStus",
         "status": "공식 요청주소·요청변수 연결 (조회 기간 최대 3개월)",
         "source_url": "https://www.data.go.kr/data/15108065/openapi.do",
@@ -1020,16 +1023,17 @@ API_KEY_NAMES = {item_id: item["key"] for item_id, item in API_ITEMS.items()}
 
 
 def validate_api_key_configuration():
-    """12개 API가 서로 다른 Secrets 키 이름을 사용하는지 확인합니다."""
+    """12개 API 서비스가 발급처별 인증키 네 개에 정확히 연결됐는지 검사합니다."""
+    expected_keys = {"ASSEMBLY_KEY", "DATA_GO_KR_KEY", "KOSIS_KEY", "VWORLD_KEY"}
     expected_items = {
         "member", "vote", "schedule", "winner", "candidate", "benefit",
         "staff", "suborg", "council", "population", "kosis", "vworld",
     }
     if set(API_ITEMS) != expected_items:
         raise RuntimeError("API_ITEMS의 12개 서비스 구성이 예상 목록과 다릅니다.")
-    keys = [item.get("key", "") for item in API_ITEMS.values()]
-    if len(keys) != 12 or len(set(keys)) != 12 or any(not key for key in keys):
-        raise RuntimeError("각 API에는 서로 다른 전용 Secrets 키 이름이 하나씩 지정되어야 합니다.")
+    keys = {item.get("key", "") for item in API_ITEMS.values()}
+    if keys != expected_keys:
+        raise RuntimeError("12개 API의 인증키 연결이 네 발급처 키와 일치하지 않습니다.")
     return True
 
 
@@ -1037,20 +1041,15 @@ validate_api_key_configuration()
 
 
 def open_assembly_call(item_id: str, extra=None):
+    """열린국회정보 API 3종은 하나의 ASSEMBLY_KEY로 호출합니다."""
     item = API_ITEMS[item_id]
     key_name = item["key"]
     key = api_key(key_name)
     if not key:
         return [], api_key_error_message(key_name)
     url = item["url"]
-    if item_id == "schedule":
-        url = api_url("ASSEMBLY_SCHEDULE")
-        if not url:
-            schedule_code = api_code("ASSEMBLY_SCHEDULE")
-            if schedule_code:
-                url = "https://open.assembly.go.kr/portal/openapi/" + schedule_code.strip()
-        if not url:
-            return [], "국회일정 통합 API의 상세 요청 주소 또는 API 코드를 Secrets의 API_URLS/API_CODES에 등록해 주세요."
+    if not url:
+        return [], "이 국회 API의 요청 주소가 코드에 등록되지 않았습니다. 개발자 확인이 필요합니다."
     if item_id == "vote":
         if not extra or not extra.get("AGE") or not extra.get("BILL_ID"):
             return [], "본회의 표결정보 조회에는 국회 대수(AGE)와 의안 ID(BILL_ID)가 필요합니다."
@@ -1146,7 +1145,7 @@ def filter_public_service_rows(rows, keyword: str):
 
 
 def data_go_call(item_id: str, extra=None):
-    """공공데이터포털 API 어댑터. 각 서비스 전용 키와 공식 요청변수를 사용합니다."""
+    """공공데이터포털 개인 키 하나를 NEC 2개·행안부 5개 API에 공통 사용합니다."""
     if item_id not in API_ITEMS:
         return [], "등록되지 않은 공공데이터 항목입니다."
 
@@ -1194,9 +1193,7 @@ def data_go_call(item_id: str, extra=None):
             return [], "페이지 번호는 1 이상의 정수로 입력해 주세요."
         params = {"serviceKey": key, "page": page, "perPage": 100, "returnType": "JSON"}
     elif item_id == "council":
-        url = api_url("MOIS_COUNCIL_SEATS")
-        if not url:
-            return [], "지방의회의원 정수 API 상세 요청 주소를 API_URLS.MOIS_COUNCIL_SEATS에 등록해야 합니다."
+        # 공공데이터포털 공식 명세의 고정 요청 주소를 사용합니다.
         params["type"] = "xml"
         params.pop("resultType", None)
     elif item_id == "population":
@@ -1344,6 +1341,24 @@ def google_search_link(label: str, term: str):
     st.link_button(label, "https://www.google.com/search?q=" + quote_plus(term), use_container_width=True)
 
 
+PASTEL_COLORS = ("blue", "sky", "pink", "orange", "yellow", "green", "purple", "mint")
+
+def soft_button(label: str, key: str, color: str = "blue", **kwargs):
+    """버튼마다 은은한 파스텔 배경을 적용하는 공통 버튼입니다."""
+    color = color if color in PASTEL_COLORS else "blue"
+    safe_key = re.sub(r"[^a-zA-Z0-9_-]", "-", key)
+    with st.container(key=f"softbutton-{color}-{safe_key}"):
+        return st.button(label, key=key, **kwargs)
+
+
+def favicon_url(homepage: str) -> str:
+    """언론사·기관 홈페이지의 파비콘을 작은 로고로 보여 줍니다."""
+    parsed = urlsplit(homepage or "")
+    domain = parsed.netloc or parsed.path
+    domain = domain.split("@")[ -1 ].split(":")[0]
+    return f"https://www.google.com/s2/favicons?domain={quote_plus(domain)}&sz=128" if domain else ""
+
+
 # ============================================================
 # 7. 퀴즈 상태 / 객관식 진행 / 결과 모달
 # ============================================================
@@ -1353,12 +1368,14 @@ def initialize_state():
         "page": "홈",
         "quiz_active": False,
         "quiz_result_open": False,
+        "quiz_answer_submitted": False,
+        "quiz_today_completed_date": "",
         "quiz_questions": [],
         "quiz_current": 0,
         "quiz_answers": [],
         "quiz_right_count": 0,
         "quiz_title": "",
-        "quiz_return_page": "정치 퀴즈·미니게임",
+        "quiz_return_page": "정치 퀴즈",
         "home_daily_result": None,
         "news_focus": "",
         "live_candidate_pool": [],
@@ -1401,11 +1418,12 @@ def begin_quiz(questions, title, return_page=None):
     st.session_state.quiz_title = title
     st.session_state.quiz_active = True
     st.session_state.quiz_result_open = False
+    st.session_state.quiz_answer_submitted = False
     if return_page:
         st.session_state.quiz_return_page = return_page
 
 
-@st.dialog("퀴즈 결과", width="large")
+@st.dialog("퀴즈 결과", width="large", dismissible=False)
 def show_quiz_result_dialog():
     answers = st.session_state.quiz_answers
     total = len(answers)
@@ -1439,39 +1457,34 @@ def show_quiz_result_dialog():
             if source and is_safe_http_url(source):
                 st.link_button("문제의 공식 자료 출처", source, key=f"quiz_result_source_{number}")
 
-    if st.button("나가기", type="primary", use_container_width=True):
+    if st.button("결과 닫기 · 퀴즈 화면으로 돌아가기", type="primary", use_container_width=True):
+        is_daily = str(st.session_state.get("quiz_title", "")).startswith("오늘의 퀴즈")
+        completed = bool(st.session_state.quiz_questions) and len(st.session_state.quiz_answers) == len(st.session_state.quiz_questions)
+        if is_daily and completed:
+            st.session_state.quiz_today_completed_date = korea_today().isoformat()
+            st.session_state.home_daily_result = {
+                "완료": True, "푼문제": len(st.session_state.quiz_answers),
+                "정답": correct, "정답률": (correct / total * 100) if total else 0,
+            }
         st.session_state.quiz_active = False
         st.session_state.quiz_result_open = False
-        st.session_state.page = st.session_state.quiz_return_page
+        st.session_state.quiz_answer_submitted = False
+        target_page = "정치 퀴즈" if (is_daily and completed) else st.session_state.get("quiz_return_page", "정치 퀴즈")
+        st.session_state.page = target_page
+        if target_page == "정치 퀴즈":
+            st.session_state.quiz_mode = "today"
         st.rerun()
 
 
 def render_quiz_type_selector(quiz_questions):
+    """오늘의 퀴즈 외에 선택할 수 있는 일반 객관식 연습 문제만 제공합니다."""
     st.divider()
-    render_section("퀴즈 종류 선택")
-    options = [
-        ("today", "📋", "오늘의 퀴즈"),
-        ("multiple", "☷", "객관식"),
-        ("crossword", "▦", "십자말풀이"),
-        ("fillblank", "↔", "빈칸 채우기"),
-    ]
-    cols = st.columns(4)
-    for col, (mode, icon, label) in zip(cols, options):
-        with col:
-            if st.button(f"{icon}\n{label}", key=f"quiz_mode_{mode}", use_container_width=True):
-                st.session_state.quiz_mode = mode
-                if mode in ("today", "multiple") and quiz_questions:
-                    ordered = list(quiz_questions)
-                    if mode == "today":
-                        digest = int(korea_today().strftime("%Y%m%d"))
-                        offset = digest % len(ordered)
-                        ordered = ordered[offset:] + ordered[:offset]
-                    else:
-                        random.shuffle(ordered)
-                    begin_quiz(ordered[:min(10, len(ordered))], "오늘의 퀴즈" if mode == "today" else "객관식 퀴즈", st.session_state.get("quiz_return_page", "홈"))
-                else:
-                    st.session_state.quiz_active = False
-                st.rerun()
+    render_section("추가 학습")
+    with st.container(border=True):
+        st.markdown("<div style='text-align:center;font-size:2rem'>🎯</div><div style='text-align:center;font-weight:750'>객관식 연습 퀴즈</div>", unsafe_allow_html=True)
+        if soft_button("객관식 연습 시작", "quiz_mode_multiple", color="orange", use_container_width=True):
+            st.session_state.quiz_mode = "multiple"
+            st.rerun()
 
 
 def filter_member_frame(frame: pd.DataFrame, district: str) -> pd.DataFrame:
@@ -1592,7 +1605,6 @@ def render_quiz_session(quiz_questions):
     if not questions:
         st.info("출제할 문제가 없습니다. Quiz.txt의 문제 형식을 확인해 주세요.")
         st.session_state.quiz_active = False
-        render_quiz_type_selector(quiz_questions)
         return
 
     if st.session_state.quiz_result_open:
@@ -1605,48 +1617,62 @@ def render_quiz_session(quiz_questions):
         st.rerun()
         return
 
+    question = questions[current]
     left, right = st.columns([5, 1])
     with left:
         quiz_title = st.session_state.get("quiz_title") or "정치 퀴즈"
         st.markdown(f"### {html.escape(str(quiz_title))}")
-        st.caption(f"{html.escape(str(quiz_title))} · {current + 1} / {len(questions)}")
+        st.caption(f"{current + 1} / {len(questions)} 문제")
     with right:
-        if st.button("↪ 퀴즈 종료", key="quiz_exit", use_container_width=True):
+        if soft_button("↪ 퀴즈 종료", "quiz_exit", color="pink", use_container_width=True):
             st.session_state.quiz_result_open = True
             st.rerun()
     st.progress((current + 1) / len(questions))
 
-    question = questions[current]
     with st.container(border=True):
         st.caption(question.get("분야", "오늘의 정치 상식"))
         st.markdown(f"### {html.escape(question['문제'])}")
-        selected = st.radio(
-            "선택지", question["선택지"], key=f"session_answer_{current}",
-            index=None, label_visibility="collapsed",
-        )
-        if st.button("정답 제출", type="primary", disabled=selected is None, key=f"session_submit_{current}"):
-            try:
-                correct_index = int(question["정답"]) - 1
-                correct_answer = question["선택지"][correct_index]
-            except (ValueError, IndexError, TypeError):
-                st.error("문제의 정답 항목이 올바르지 않습니다. Quiz.txt의 정답 번호를 확인해 주세요.")
-                return
-            is_correct = selected == correct_answer
-            st.session_state.quiz_answers.append({
-                "문제": question["문제"],
-                "선택답": selected,
-                "정답": correct_answer,
-                "정답여부": is_correct,
-                "해설": question.get("해설", ""),
-                "분야": question.get("분야", "실시간 정치자료"),
-                "출처": question.get("출처", ""),
-            })
-            st.session_state.quiz_current += 1
-            if st.session_state.quiz_current >= len(questions):
-                st.session_state.quiz_result_open = True
-            st.rerun()
-
-    render_quiz_type_selector(quiz_questions)
+        if not st.session_state.get("quiz_answer_submitted", False):
+            selected = st.radio(
+                "선택지", question["선택지"], key=f"session_answer_{current}",
+                index=None, label_visibility="collapsed",
+            )
+            if soft_button("정답 제출", f"session_submit_{current}", color="blue", type="primary", disabled=selected is None, use_container_width=True):
+                try:
+                    correct_index = int(question["정답"]) - 1
+                    correct_answer = question["선택지"][correct_index]
+                except (ValueError, IndexError, TypeError):
+                    st.error("문제의 정답 항목이 올바르지 않습니다. Quiz.txt의 정답 번호를 확인해 주세요.")
+                    return
+                is_correct = selected == correct_answer
+                st.session_state.quiz_answers.append({
+                    "문제": question["문제"], "선택답": selected, "정답": correct_answer,
+                    "정답여부": is_correct, "해설": question.get("해설", ""),
+                    "분야": question.get("분야", "실시간 정치자료"), "출처": question.get("출처", ""),
+                })
+                st.session_state.quiz_answer_submitted = True
+                st.rerun()
+        else:
+            answer = st.session_state.quiz_answers[-1]
+            if answer["정답여부"]:
+                st.success(f"정답입니다! 선택한 답: {html.escape(str(answer['선택답']))}")
+            else:
+                st.error(f"오답입니다. 선택한 답: {html.escape(str(answer['선택답']))} · 정답: {html.escape(str(answer['정답']))}")
+            st.markdown("**해설**")
+            st.write(answer.get("해설") or "등록된 해설이 없습니다.")
+            source = answer.get("출처", "")
+            if source and is_safe_http_url(source):
+                st.link_button("관련 자료 출처 확인", source)
+            st.divider()
+            if current + 1 < len(questions):
+                if soft_button("다음 문제", f"quiz_next_{current}", color="green", type="primary", use_container_width=True):
+                    st.session_state.quiz_current += 1
+                    st.session_state.quiz_answer_submitted = False
+                    st.rerun()
+            else:
+                if soft_button("오늘의 결과 보기" if str(st.session_state.get("quiz_title", "")).startswith("오늘의") else "퀴즈 결과 보기", "quiz_show_final_result", color="purple", type="primary", use_container_width=True):
+                    st.session_state.quiz_result_open = True
+                    st.rerun()
 
 # ============================================================
 # 8. 실시간 API 퀴즈 생성
@@ -1826,7 +1852,9 @@ def go_to_api_item(item_id: str):
 
 
 def render_home(quiz_questions):
-    # 메인 화면은 첨부된 최종 시안의 퀴즈 상단 + 뉴스/자료 바로가기 하단 구성을 따릅니다.
+    """홈의 오늘의 문제를 보여주고, 전체 퀴즈 완료 상태와 별도 답변 상태를 구분합니다."""
+    today_key = korea_today().isoformat()
+    completed_today = st.session_state.get("quiz_today_completed_date") == today_key
     with st.container(border=True):
         title_col, badge_col = st.columns([4, 1])
         with title_col:
@@ -1834,207 +1862,330 @@ def render_home(quiz_questions):
         with badge_col:
             st.markdown("<div style='text-align:right'><span style='background:#d7f4e4;color:#08783b;padding:4px 10px;border-radius:20px;font-size:.82rem'>오늘의 문제</span></div>", unsafe_allow_html=True)
         st.caption("※ 국회·선거·행정부 관련 자료를 바탕으로 한 퀴즈가 제공됩니다.")
-        st.caption("오늘의 교과 퀴즈는 Quiz.txt에서 출제하고, 실시간 인물 퀴즈는 정치인·당선인 API 자료를 이용합니다.")
-        today_question = None
-        if quiz_questions:
+        st.caption("교과 퀴즈는 Quiz.txt에서 출제하고, 실시간 인물 퀴즈는 공식 정치인·선거 자료를 활용합니다.")
+
+        if not quiz_questions:
+            st.info("출제할 문제가 없습니다. Quiz.txt의 문제 형식을 확인해 주세요.")
+        else:
             digest = int(korea_today().strftime("%Y%m%d"))
             today_question = quiz_questions[digest % len(quiz_questions)]
-
-        if today_question:
-            st.markdown("### 오늘의 정치 상식")
-            st.markdown(f"<div style='font-size:1.18rem;line-height:1.6;margin:.25rem 0 .7rem'>{html.escape(today_question['문제'])}</div>", unsafe_allow_html=True)
-            result = st.session_state.get("home_daily_result")
-            if result and result.get("문제") != today_question["문제"]:
-                st.session_state.home_daily_result = None
-                result = None
-            if not result:
-                selected = st.radio(
-                    "선택지를 고르세요.", today_question["선택지"], index=None,
-                    key=f"home_daily_choice_{korea_today().strftime('%Y%m%d')}", label_visibility="collapsed",
-                )
-                if st.button("정답 제출", type="primary", disabled=selected is None, key="home_submit"):
-                    correct_answer = today_question["선택지"][today_question["정답"] - 1]
-                    st.session_state.home_daily_result = {
-                        "문제": today_question["문제"],
-                        "정답여부": selected == correct_answer,
-                        "내답": selected,
-                        "정답": correct_answer,
-                        "해설": today_question.get("해설", "해설이 등록되지 않았습니다."),
-                    }
-                    st.rerun()
-            if result:
-                if result["정답여부"]:
-                    st.success("정답입니다.")
-                else:
-                    st.error(f"오답입니다. 정답은 '{result['정답']}'입니다.")
-                st.write(result["해설"])
-                if st.button("퀴즈·미니게임 화면으로 이동", type="primary", use_container_width=True, key="home_to_quiz"):
-                    st.session_state.quiz_return_page = "홈"
+            if completed_today:
+                st.success("🎉 오늘의 퀴즈 완료!")
+                result = st.session_state.get("home_daily_result") or {}
+                if result.get("푼문제") is not None:
+                    m1, m2, m3 = st.columns(3)
+                    m1.metric("푼 문제", f"{result.get('푼문제', 0)}개")
+                    m2.metric("정답", f"{result.get('정답', 0)}개")
+                    m3.metric("정답률", f"{result.get('정답률', 0):.0f}%")
+                st.caption("오늘의 문제 풀이가 완료되어 홈 화면에서는 새로운 답안을 받지 않습니다.")
+                if soft_button("오늘의 퀴즈 결과 확인", "home_open_today_result", color="green", type="primary", use_container_width=True):
+                    st.session_state.page = "정치 퀴즈"
                     st.session_state.quiz_mode = "today"
-                    st.session_state.quiz_active = False
-                    st.session_state.page = "정치 퀴즈·미니게임"
                     st.rerun()
-        else:
-            st.info("출제할 문제가 없습니다. Quiz.txt의 문제 형식을 확인해 주세요.")
+            else:
+                st.markdown("### 오늘의 정치 상식")
+                st.markdown(f"<div style='font-size:1.18rem;line-height:1.6;margin:.25rem 0 .7rem'>{html.escape(today_question['문제'])}</div>", unsafe_allow_html=True)
+                result = st.session_state.get("home_daily_result")
+                # 결과 요약 딕셔너리와 홈의 1문항 답변 딕셔너리를 혼동하지 않습니다.
+                if result and result.get("문제") != today_question["문제"]:
+                    st.session_state.home_daily_result = None
+                    result = None
+                if not result:
+                    selected = st.radio(
+                        "선택지를 고르세요.", today_question["선택지"], index=None,
+                        key=f"home_daily_choice_{today_key.replace('-', '')}", label_visibility="collapsed",
+                    )
+                    if st.button("정답 제출", type="primary", disabled=selected is None, key="home_submit"):
+                        correct_answer = today_question["선택지"][int(today_question["정답"]) - 1]
+                        st.session_state.home_daily_result = {
+                            "문제": today_question["문제"],
+                            "정답여부": selected == correct_answer,
+                            "내답": selected,
+                            "정답": correct_answer,
+                            "해설": today_question.get("해설", "해설이 등록되지 않았습니다."),
+                        }
+                        st.rerun()
+                else:
+                    if result.get("정답여부"):
+                        st.success("정답입니다!")
+                    else:
+                        st.error(f"오답입니다. 정답은 '{result.get('정답', '확인 필요')}'입니다.")
+                    st.markdown("**해설**")
+                    st.write(result.get("해설") or "등록된 해설이 없습니다.")
+                    if soft_button("전체 정치 퀴즈로 이동", "home_to_quiz", color="blue", type="primary", use_container_width=True):
+                        st.session_state.quiz_return_page = "정치 퀴즈"
+                        st.session_state.quiz_mode = "today"
+                        st.session_state.quiz_active = False
+                        st.session_state.page = "정치 퀴즈"
+                        st.rerun()
 
     st.write("")
     news_col, shortcut_col = st.columns([.78, 2.25], gap="large")
     with news_col:
         render_section("뉴스")
-        if st.button("◔  국내", key="home_news_domestic", use_container_width=True):
+        if soft_button("🇰🇷  국내", "home_news_domestic", color="sky", use_container_width=True):
             st.session_state.news_focus = "국내"
             st.session_state.page = "뉴스 속보"
             st.rerun()
-        if st.button("◎  국제", key="home_news_global", use_container_width=True):
+        if soft_button("🌐  국제", "home_news_global", color="orange", use_container_width=True):
             st.session_state.news_focus = "국제"
             st.session_state.page = "뉴스 속보"
             st.rerun()
     with shortcut_col:
         render_section("자료 바로가기")
         shortcut_items = [
-            ("member", "♙", "국회의원"),
-            ("vote", "☑", "본회의 표결"),
-            ("schedule", "▦", "국회 일정"),
-            ("winner", "♙", "당선인"),
-            ("candidate", "⌕", "후보자"),
-            ("benefit", "♧", "공공서비스"),
+            ("member", "👥", "국회의원"),
+            ("vote", "🗳️", "본회의 표결"),
+            ("schedule", "📅", "국회 일정"),
+            ("winner", "🏅", "당선인"),
+            ("candidate", "🔎", "후보자"),
+            ("benefit", "🤝", "공공서비스"),
         ]
         for start in (0, 3):
             cols = st.columns(3)
             for col, (item_id, icon, label) in zip(cols, shortcut_items[start:start + 3]):
                 with col:
-                    if st.button(f"{icon}\n{label}", key=f"home_api_{item_id}", use_container_width=True):
+                    if soft_button(f"{icon}\n{label}", f"home_api_{item_id}", color=PASTEL_COLORS[(start + len(label)) % len(PASTEL_COLORS)], use_container_width=True):
                         go_to_api_item(item_id)
         st.caption("선택하면 해당 공공자료의 설명과 원자료를 확인할 수 있습니다.")
 
 # ============================================================
-# 10. 화면: 퀴즈와 미니게임
+# 10. 화면: 정치 퀴즈
 # ============================================================
 
 def render_quiz_hub(quiz_questions):
-    mode = st.session_state.get("quiz_mode", "today")
+    """오늘의 퀴즈를 기본 화면으로 바로 시작하고, 완료 후 객관식 연습을 제공합니다."""
     if st.session_state.quiz_active:
         render_quiz_session(quiz_questions)
         return
 
-    if mode == "games":
-        render_hero("미니게임", "퀴즈 유형을 선택해 정치 학습을 시작하세요.")
-        with st.container(border=True):
-            st.markdown("### 게임 유형")
-            st.write("현재 이용할 수 있는 유형은 오늘의 퀴즈와 객관식입니다. 십자말풀이와 빈칸 채우기는 문제 형식과 생성 규칙을 확정한 뒤 연결할 예정입니다.")
-        render_quiz_type_selector(quiz_questions)
-        st.divider()
-        st.markdown("### 실제 정치인 자료로 퀴즈 만들기")
-        st.caption("공공데이터에서 조회한 국회의원·당선인·후보자 정보만 사용합니다. 인물의 경력은 API 응답에 실제로 포함된 경우에만 문제로 만듭니다.")
-        render_live_quiz_tools()
+    today_done = st.session_state.get("quiz_today_completed_date") == korea_today().isoformat()
+    if st.session_state.get("quiz_mode", "today") == "multiple" and not today_done:
+        if not quiz_questions:
+            render_hero("정치 퀴즈", "Quiz.txt의 문항을 확인해 주세요.")
+            st.warning("출제할 문제가 없습니다.")
+            return
+        practice = list(quiz_questions)
+        random.shuffle(practice)
+        begin_quiz(practice[:min(10, len(practice))], "객관식 연습 퀴즈", "정치 퀴즈")
+        st.rerun()
         return
 
-    if mode in ("crossword", "fillblank"):
-        render_hero("정치 퀴즈 · 미니게임", "퀴즈 유형을 선택해 학습을 이어가세요.")
-        with st.container(border=True):
-            if mode == "crossword":
-                st.markdown("### ▦ 십자말풀이")
-                st.info("십자말풀이 화면은 문제 데이터 구조와 격자 생성 규칙을 확정한 뒤 연결할 예정입니다. 현재는 다른 퀴즈 유형을 이용할 수 있습니다.")
-            else:
-                st.markdown("### ↔ 빈칸 채우기")
-                st.info("빈칸 채우기 화면은 Quiz.txt에 빈칸형 문제 형식을 추가한 뒤 연결할 예정입니다. 현재는 다른 퀴즈 유형을 이용할 수 있습니다.")
-        render_quiz_type_selector(quiz_questions)
-        return
-
-    if not quiz_questions:
-        render_hero("정치 퀴즈 · 미니게임", "출제 자료를 확인해 주세요.")
-        st.warning("Quiz.txt에서 유효한 문제를 찾지 못했습니다.")
-        render_quiz_type_selector(quiz_questions)
-        return
-
-    # 퀴즈 페이지에 진입하면 시작 버튼 없이 바로 첫 문제를 표시합니다.
-    ordered = list(quiz_questions)
-    if mode == "today":
-        digest = int(korea_today().strftime("%Y%m%d"))
-        offset = digest % len(ordered)
-        ordered = ordered[offset:] + ordered[:offset]
+    if today_done:
+        render_hero("정치 퀴즈", "오늘의 정치 교과 퀴즈를 완료했습니다.")
+        st.success("🎉 오늘의 퀴즈 완료!")
+        result = st.session_state.get("home_daily_result") or {}
+        m1, m2, m3 = st.columns(3)
+        m1.metric("푼 문제", f"{result.get('푼문제', len(st.session_state.quiz_answers))}개")
+        m2.metric("정답", f"{result.get('정답', sum(1 for x in st.session_state.quiz_answers if x.get('정답여부')))}개")
+        m3.metric("정답률", f"{result.get('정답률', 0):.0f}%")
+        if st.button("오늘의 퀴즈 결과 다시 보기", key="quiz_reopen_result", use_container_width=True):
+            st.session_state.quiz_result_open = True
+            st.rerun()
+        if st.button("객관식 연습 퀴즈 시작", key="quiz_start_multiple_after_today", use_container_width=True):
+            st.session_state.quiz_mode = "multiple"
+            st.rerun()
     else:
-        random.shuffle(ordered)
-    begin_quiz(ordered[:min(10, len(ordered))], "오늘의 퀴즈" if mode == "today" else "객관식 퀴즈", st.session_state.get("quiz_return_page", "홈"))
-    st.rerun()
+        if not quiz_questions:
+            render_hero("정치 퀴즈", "Quiz.txt의 문항을 확인해 주세요.")
+            st.warning("출제할 문제가 없습니다. Quiz.txt의 문제 형식과 필수 항목을 확인해 주세요.")
+            return
+        # 날짜를 바탕으로 문항 순서를 고정해 새로고침해도 같은 오늘의 세트가 출제됩니다.
+        ordered = list(quiz_questions)
+        digest = int(korea_today().strftime("%Y%m%d"))
+        offset = digest % len(ordered) if ordered else 0
+        ordered = ordered[offset:] + ordered[:offset]
+        begin_quiz(ordered[:min(10, len(ordered))], "오늘의 퀴즈", "정치 퀴즈")
+        st.rerun()
+        return
+
+    st.divider()
+    render_live_quiz_tools()
 
 # ============================================================
 # 11. 화면: 뉴스 (국내/국제 2열 + 각 목록 자체 스크롤)
 # ============================================================
 
+def _publisher_homepage(publisher: str, feed_url: str = "") -> str:
+    """NEWS.txt의 언론사 이름과 RSS 주소로 홈페이지 바로가기를 구성합니다."""
+    label = str(publisher or "").casefold()
+    mapping = {
+        "kbs": "https://news.kbs.co.kr/", "연합뉴스": "https://www.yna.co.kr/",
+        "bbc": "https://www.bbc.com/news", "cnn": "https://edition.cnn.com/",
+        "reuters": "https://www.reuters.com/", "ap": "https://apnews.com/",
+        "afp": "https://www.afp.com/", "france24": "https://www.france24.com/",
+    }
+    for token, url in mapping.items():
+        if token in label:
+            return url
+    host = urlsplit(feed_url or "").netloc.lower()
+    if host.startswith("feeds."):
+        host = host[6:]
+    if host.startswith("rss."):
+        host = host[4:]
+    if host.startswith("world."):
+        host = host[6:]
+    if host.startswith("news."):
+        host = host[5:]
+    return f"https://{host}/" if host else "https://www.google.com/"
+
+
+NEWS_PASTEL_PALETTES = [
+    ("#F0F7FF", "#DDEBFA", "#416485"),
+    ("#F0FAFC", "#DCEFF3", "#3E6871"),
+    ("#FFF4F7", "#F7E1E8", "#815363"),
+    ("#FFF7EF", "#F5E6D6", "#806044"),
+    ("#FFFBE8", "#F2ECCB", "#766A34"),
+    ("#F0F8F2", "#DDEEE2", "#456B50"),
+    ("#F5F2FF", "#E8E0F8", "#5F527D"),
+]
+NEWS_PUBLISHER_SHORTCUT_COLORS = ("blue", "sky", "pink", "orange", "yellow", "green", "purple")
+
+
+def news_publisher_palette(publisher: str):
+    """언론사마다 중립적인 파스텔 색을 고정적으로 배정합니다."""
+    digest = hashlib.sha256(str(publisher or "").encode("utf-8")).digest()
+    return NEWS_PASTEL_PALETTES[digest[0] % len(NEWS_PASTEL_PALETTES)]
+
+
+def publisher_symbol(publisher: str) -> str:
+    """외부 파비콘이 로드되지 않을 때 보여줄 직관적인 색상 이모지 대체 아이콘입니다."""
+    symbols = {
+        "KBS": "📺", "연합뉴스": "📰", "BBC": "🌐", "CNN": "📡",
+        "Reuters": "🌍", "AP": "🗞️", "AFP·France24": "🌎",
+    }
+    return symbols.get(str(publisher or ""), "📰")
+
+
+def _news_article_html(article: dict) -> str:
+    publisher = str(article.get("publisher", "언론사"))
+    home = _publisher_homepage(publisher, article.get("feed_url", ""))
+    icon = favicon_url(home)
+    symbol = publisher_symbol(publisher)
+    link = article.get("link", "")
+    bg1, bg2, border_color = news_publisher_palette(publisher)
+    title_html = (
+        f'<a href="{html.escape(link, quote=True)}" target="_blank" rel="noopener noreferrer">{html.escape(str(article.get("title", "제목 없음")))}</a>'
+        if is_safe_http_url(link) else html.escape(str(article.get("title", "제목 없음")))
+    )
+    return (
+        f'<div class="news-card" style="background:linear-gradient(120deg,{bg1},{bg2});border-color:{border_color}55">'
+        f'<div class="publisher-mark"><img src="{html.escape(icon, quote=True)}" alt="" '
+        f"""onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">"""
+        f'<span class="publisher-fallback" style="display:none">{html.escape(symbol)}</span>{html.escape(publisher)}</div>' 
+        f'<div class="news-title">{title_html}</div>'
+        f'<div class="news-meta">{html.escape(str(article.get("published", "날짜 정보 없음")))}</div>'
+        f'<div class="news-summary">{html.escape(str(article.get("summary", "")))}</div></div>'
+    )
+
+
+def filter_news_articles(articles, region="종합", publisher="전체 언론사", keyword="", sort_order="최신순"):
+    """수집된 RSS 기사 안에서 범위·언론사·키워드를 필터링하고 정렬합니다."""
+    filtered = [
+        dict(item) for item in (articles or [])
+        if region == "종합" or str(item.get("region", "")) == region
+    ]
+    if publisher and publisher != "전체 언론사":
+        filtered = [item for item in filtered if str(item.get("publisher", "")) == publisher]
+    needle = re.sub(r"\s+", "", str(keyword or "")).casefold()
+    if needle:
+        filtered = [
+            item for item in filtered
+            if needle in re.sub(r"\s+", "", " ".join((
+                str(item.get("title", "")), str(item.get("summary", "")),
+                str(item.get("publisher", "")),
+            ))).casefold()
+        ]
+    if sort_order == "오래된순":
+        filtered.sort(key=lambda item: int(item.get("published_timestamp", 0) or 0))
+    elif sort_order == "언론사순":
+        filtered.sort(key=lambda item: (str(item.get("publisher", "")), -int(item.get("published_timestamp", 0) or 0)))
+    else:
+        filtered.sort(key=lambda item: int(item.get("published_timestamp", 0) or 0), reverse=True)
+    return filtered
+
+
 def render_news():
-    render_hero("뉴스·속보", "지정된 언론사의 RSS를 통해 국내·국제 주요 뉴스를 확인합니다.")
+    render_hero("뉴스·속보", "여러 언론사의 국내·국제 보도를 검색하고 원문 출처를 확인합니다.")
     grouped, grouped_errors, source_issues = collect_all_news()
-    domestic, domestic_errors = grouped["국내"], grouped_errors["국내"]
-    international, international_errors = grouped["국제"], grouped_errors["국제"]
+    sources, _ = load_news_sources_with_issues()
+    domestic, international = grouped["국내"], grouped["국제"]
     if source_issues:
         with st.expander(f"NEWS.txt 설정 확인 ({len(source_issues)}건)", expanded=False):
             for issue in source_issues:
                 st.warning(issue)
 
-    focus = st.session_state.get("news_focus", "")
-    if focus in ("국내", "국제"):
-        top_col, reset_col = st.columns([5, 1])
-        with top_col:
-            st.info(f"메인 화면에서 선택한 **{focus} 뉴스**를 우선 표시하고 있습니다. 반대 영역도 함께 확인할 수 있습니다.")
-        with reset_col:
-            if st.button("선택 해제", key="news_focus_clear", use_container_width=True):
-                st.session_state.news_focus = ""
-                st.rerun()
+    all_items = domestic + international
+    for article in all_items:
+        if not article.get("feed_url"):
+            article["feed_url"] = ""
 
-    # 국내·국제의 좌우 위치는 유지하되, 메인 화면에서 선택한 쪽을 넓게 보여 줍니다.
-    if focus == "국내":
-        col_domestic, col_global = st.columns([1.35, 1], gap="medium")
-    elif focus == "국제":
-        col_domestic, col_global = st.columns([1, 1.35], gap="medium")
-    else:
+    focus = st.session_state.get("news_focus", "")
+    default_view = focus if focus in ("국내", "국제") else "종합"
+    view_options = ["종합", "국내", "국제"]
+    filter_col, search_col, sort_col = st.columns([1.0, 2.3, 1.25])
+    with filter_col:
+        view_mode = st.selectbox("기사 범위", view_options, index=view_options.index(default_view), key="news_view_mode")
+    publisher_options = ["전체 언론사"] + list(dict.fromkeys(x["publisher"] for x in sources))
+    with search_col:
+        keyword = st.text_input("키워드 검색", placeholder="기사 제목·요약·언론사 검색", key="news_keyword")
+    with sort_col:
+        sort_order = st.selectbox("정렬", ["최신순", "오래된순", "언론사순"], key="news_sort_order")
+    publisher = st.selectbox("언론사", publisher_options, key="news_publisher_filter")
+
+    filtered = filter_news_articles(all_items, view_mode, publisher, keyword, sort_order)
+
+    st.caption(f"검색 결과 {len(filtered)}건 · 검색은 현재 수집된 RSS 기사에서 수행됩니다.")
+    if view_mode == "종합" and publisher == "전체 언론사" and not keyword.strip():
         col_domestic, col_global = st.columns(2, gap="medium")
-    for col, title, items, errors in [
-        (col_domestic, "국내", domestic, domestic_errors),
-        (col_global, "국제", international, international_errors),
-    ]:
-        with col:
-            suffix = " · 선택" if focus == title else ""
-            st.markdown(f"### {title}{suffix}")
-            with st.container(height=650, border=True):
-                if not items:
-                    st.info("기사를 불러오지 못했습니다. NEWS.txt의 RSS 주소와 언론사 서버 상태를 확인해 주세요.")
-                for article in items:
-                    link = article["link"]
-                    title_html = (
-                        f'<a href="{html.escape(link, quote=True)}" target="_blank" rel="noopener noreferrer">{html.escape(article["title"])}</a>'
-                        if is_safe_http_url(link) else html.escape(article["title"])
-                    )
-                    st.markdown(
-                        f'<div class="news-card"><div class="muted">{html.escape(article["publisher"])}</div>'
-                        f'<div class="news-title">{title_html}</div>'
-                        f'<div class="news-meta">{html.escape(article["published"])}</div>'
-                        f'<div class="news-summary">{html.escape(article["summary"])}</div></div>',
-                        unsafe_allow_html=True,
-                    )
-            if errors:
-                with st.expander(f"일부 RSS 연결 오류 ({len(errors)})"):
-                    for err in errors:
-                        st.caption(err)
+        for col, title, items in [(col_domestic, "🇰🇷 국내", domestic), (col_global, "🌐 국제", international)]:
+            with col:
+                st.markdown(f"### {title}")
+                with st.container(height=610, border=True):
+                    sorted_items = [x for x in filtered if x.get("region") == ("국내" if "국내" in title else "국제")]
+                    for article in sorted_items:
+                        st.markdown(_news_article_html(article), unsafe_allow_html=True)
+                    if not sorted_items:
+                        st.info("표시할 기사가 없습니다. RSS 응답과 NEWS.txt를 확인해 주세요.")
+                errors = grouped_errors["국내" if "국내" in title else "국제"]
+                if errors:
+                    with st.expander(f"일부 RSS 연결 오류 ({len(errors)})"):
+                        for err in errors:
+                            st.caption(err)
+    else:
+        with st.container(height=620, border=True):
+            for article in filtered:
+                st.markdown(_news_article_html(article), unsafe_allow_html=True)
+            if not filtered:
+                st.info("검색 조건과 일치하는 기사가 없습니다. 검색어·언론사·국내외 범위를 바꿔 보세요.")
 
     st.divider()
-    render_section("언론사 바로가기")
-    outlets = [
-        ("KBS", "📰", "https://news.kbs.co.kr/"),
-        ("연합뉴스", "▤", "https://www.yna.co.kr/"),
-        ("Reuters", "◉", "https://www.reuters.com/"),
-        ("AP", "◎", "https://apnews.com/"),
-        ("AFP", "◈", "https://www.afp.com/"),
-        ("BBC", "◍", "https://www.bbc.com/news"),
-        ("CNN", "▣", "https://edition.cnn.com/"),
-    ]
-    cols = st.columns(7)
-    for col, (name, icon, url) in zip(cols, outlets):
-        with col:
-            st.link_button(f"{icon} {name}", url, use_container_width=True)
+    render_section("언론사 바로가기", "NEWS.txt에 등록된 언론사만 자동으로 표시합니다.")
+    unique_outlets = []
+    seen = set()
+    for source in sources:
+        if source["publisher"] in seen:
+            continue
+        seen.add(source["publisher"])
+        unique_outlets.append((source["publisher"], _publisher_homepage(source["publisher"], source["url"])))
+    cols = st.columns(min(7, max(1, len(unique_outlets))))
+    for index, (name, url) in enumerate(unique_outlets):
+        color = NEWS_PUBLISHER_SHORTCUT_COLORS[index % len(NEWS_PUBLISHER_SHORTCUT_COLORS)]
+        with cols[index % len(cols)]:
+            icon = favicon_url(url)
+            symbol = publisher_symbol(name)
+            with st.container(key=f"news-publisher-card-{color}-{index}"):
+                st.markdown(
+                    f'<div class="publisher-shortcut"><img src="{html.escape(icon, quote=True)}" alt="" '
+                    f"""onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">"""
+                    f'<span class="publisher-fallback" style="display:none">{html.escape(symbol)}</span>'
+                    f'<div class="name">{html.escape(name)}</div></div>',
+                    unsafe_allow_html=True,
+                )
+                st.link_button("홈페이지 바로가기", url, use_container_width=True, key=f"news_publisher_home_{index}")
 
 # ============================================================
-# 12. 화면: 정치 자료 탐색 - 6개 아이콘 / 12개 API
+# 12. 화면: 정치 자료 탐색 - 6개 기관 그룹 / 12개 API
 # ============================================================
 
 API_EDUCATION = {
@@ -2053,54 +2204,55 @@ API_EDUCATION = {
 }
 
 
-def _api_item_icon(item_id):
-    return {
-        "member": "♙", "vote": "☑", "schedule": "▦", "winner": "♙",
-        "candidate": "⌕", "benefit": "♧", "staff": "▥", "suborg": "♧",
-        "council": "♙", "population": "▤", "kosis": "▥", "vworld": "⌖",
-    }.get(item_id, "▤")
-
-
 def render_api_catalog():
-    render_hero("정치 자료 탐색", "공식 공공데이터를 사람이 읽기 쉬운 표로 확인하고 관련 교과 개념을 함께 살펴보세요.")
-    st.caption("※ 국회·선거·행정부 관련 자료는 퀴즈 출제에도 활용됩니다.")
-    configured_count = sum(api_key_is_configured(item["key"]) for item in API_ITEMS.values())
-    duplicate_count = sum(api_key_status(item["key"]) == "중복" for item in API_ITEMS.values())
-    st.info(
-        f"API별 Secrets 항목 등록 상태: {configured_count}/12개 · "
-        "국회사무처의 국회의원 정보·본회의 표결·국회일정은 동일한 인증키를 공유합니다."
-    )
-    if duplicate_count:
-        st.warning(f"허용된 국회사무처 세 API 외의 인증키 중복 항목이 {duplicate_count}개 있습니다. 해당 요청은 차단됩니다.")
-    for group in API_GROUPS:
-        st.divider()
-        head, count_col = st.columns([4, 1])
-        with head:
-            st.markdown(f"### {group['name']} · {group['description']}")
-        with count_col:
-            st.markdown(f"<div style='text-align:right;color:var(--secondary-text-color);padding-top:.4rem'>{len(group['items'])}개 API</div>", unsafe_allow_html=True)
+    render_hero("정치 자료 탐색", "공식 공공데이터를 읽기 쉬운 형태로 확인하고 교과 개념과 연결합니다.")
+    st.caption("※ 국회·선거·행정부 자료는 퀴즈에도 활용됩니다. 자료의 기준일과 제공기관을 함께 확인하세요.")
+    configured = sum(api_key_status(key) == "등록됨" for key in API_PROVIDER_KEY_NAMES)
+    st.info(f"인증키 상태: {configured}/4개 · 12개 API 서비스는 발급처별 공통 키 네 개를 사용합니다.")
 
-        item_list = group["items"]
-        card_columns = st.columns(min(3, len(item_list)), gap="small")
-        for index, item_id in enumerate(item_list):
+    palette = ("blue", "pink", "orange", "mint", "purple", "sky")
+    for group_index, group in enumerate(API_GROUPS):
+        st.divider()
+        icon_col, title_col, count_col = st.columns([.65, 4.3, 1], gap="small")
+        with icon_col:
+            logo_url = favicon_url(group.get("logo", ""))
+            st.markdown(
+                f"<div class='api-group-logo {palette[group_index]}'>"
+                f"<img src='{html.escape(logo_url, quote=True)}' alt='{html.escape(group['icon'], quote=True)}' "
+                f"onerror=\"this.style.display='none';this.nextElementSibling.style.display='inline';\">"
+                f"<span class='fallback' style='display:none'>{html.escape(group['icon'])}</span></div>",
+                unsafe_allow_html=True,
+            )
+        with title_col:
+            st.markdown(
+                f"<div class='api-group-heading'><div><b style='font-size:1.16rem'>{html.escape(group['name'])}</b> "
+                f"<span class='subtitle'>{html.escape(group.get('subtitle',''))}</span></div></div>",
+                unsafe_allow_html=True,
+            )
+        with count_col:
+            st.markdown(f"<div style='text-align:right;color:#8993A1;padding-top:.55rem;font-size:.84rem'>{len(group['items'])}개 자료</div>", unsafe_allow_html=True)
+
+        columns = st.columns(min(3, len(group["items"])), gap="small")
+        for index, item_id in enumerate(group["items"]):
             item = API_ITEMS[item_id]
-            col = card_columns[index]
-            with col:
-                st.markdown(
-                    f'<div class="api-card"><div style="font-size:1.35rem">{_api_item_icon(item_id)}</div>'
-                    f'<div class="api-card-title">{html.escape(item["title"])}</div>'
-                    f'<div class="api-card-desc">{html.escape(item["description"])}</div>'
-                    f'<p class="tiny-note"><b>인증키 상태</b> · {html.escape(api_key_status(item["key"]))}</p>'
-                    f'<p class="tiny-note"><b>교과 연계</b><br>{html.escape(API_EDUCATION.get(item_id, "정치 제도와 공공자료 이해"))}</p>'
-                    f'<span style="font-size:.75rem;background:var(--secondary-background-color);padding:3px 8px;border-radius:15px">원자료 · 표/엑셀 · 항목 검색</span></div>',
-                    unsafe_allow_html=True,
-                )
-                if st.button("자료 자세히 보기", key=f"open_api_{item_id}", use_container_width=True):
-                    st.session_state.api_selected_item = item_id
-                    st.session_state.api_detail_rows = []
-                    st.session_state.api_detail_error = ""
-                    st.session_state.api_detail_item = ""
-                    st.rerun()
+            with columns[index % len(columns)]:
+                color = palette[(group_index + index) % len(palette)]
+                with st.container(key=f"api-card-{item_id}"):
+                    st.markdown(
+                        f"<div class='api-card' style='background:linear-gradient(145deg,#fff,{ {'blue':'#F3F8FF','pink':'#FFF5F8','orange':'#FFF8F0','mint':'#F1FAF7','purple':'#F7F5FF','sky':'#F1FAFC'}[color]})'>"
+                        f"<div class='api-card-title'>{html.escape(item['short'])}</div>"
+                        f"<div class='api-card-desc'>{html.escape(item['description'])}</div>"
+                        f"<p class='tiny-note'><b>인증키</b> · {html.escape(api_key_status(item['key']))}</p>"
+                        f"<p class='tiny-note'><b>교과 연계</b><br>{html.escape(API_EDUCATION.get(item_id, '정치 제도와 공공자료 이해'))}</p>"
+                        f"<span style='font-size:.75rem;color:#778294;background:#fff;padding:3px 8px;border-radius:15px;border:1px solid #E7EBF1'>원자료 · 표 · 엑셀</span></div>",
+                        unsafe_allow_html=True,
+                    )
+                    if soft_button("자료 자세히 보기", f"open_api_{item_id}", color=color, use_container_width=True):
+                        st.session_state.api_selected_item = item_id
+                        st.session_state.api_detail_rows = []
+                        st.session_state.api_detail_error = ""
+                        st.session_state.api_detail_item = ""
+                        st.rerun()
 
 
 def _fetch_selected_api(item_id, extra=None):
@@ -2142,9 +2294,9 @@ def render_api_detail(item_id):
     key_name = item.get("key", "")
     if key_name:
         if api_key_is_configured(key_name):
-            st.caption("🔑 이 API에 연결된 인증키가 Secrets에 등록되어 있습니다. 국회사무처 세 API는 같은 열린국회정보 키를 사용합니다.")
+            st.caption(f"🔑 이 자료는 {key_name} 공통 인증키로 연결됩니다. 해당 발급처의 여러 API가 같은 키를 공유합니다.")
         else:
-            st.warning(f"이 자료를 조회하려면 Streamlit Secrets의 API_KEYS.{key_name}에 해당 API 인증키를 등록해야 합니다. 국회사무처 세 API는 동일한 키 값을 사용합니다.")
+            st.warning(f"이 자료를 조회하려면 Streamlit Secrets의 [API_KEYS].{key_name}에 해당 발급처 인증키를 등록해 주세요.")
 
     st.markdown("### 이 자료는 무엇인가?")
     st.write(item["description"])
@@ -2706,6 +2858,56 @@ ORG_DETAILS = {
 }
 
 
+# 2026-10-02 정부기구도 및 2026-10-02 시행 정부조직법 기준으로 확인한 기관 목록입니다.
+GOVERNMENT_ORG_BASE_DATE = "2026-10-02"
+GOVERNMENT_ORG_COUNTS = {"부": 19, "처": 6, "청": 19, "위원회": 6}
+GOVERNMENT_ORG_VERIFICATION = {
+    "부": "정부조직법 제29조 기준 확인",
+    "처": "2026-10-02 정부기구도 기준 확인",
+    "청": "목록명 전수 대조 필요 — 정부디렉터리 API 승인 대기",
+    "위원회": "2026-10-02 정부기구도 기준 확인",
+}
+GOVERNMENT_ORG_LISTS = {
+    "부": [
+        "재정경제부", "과학기술정보통신부", "교육부", "외교부", "통일부", "법무부", "국방부",
+        "행정안전부", "국가보훈부", "문화체육관광부", "농림축산식품부", "산업통상부",
+        "보건복지부", "기후에너지환경부", "고용노동부", "성평등가족부", "국토교통부",
+        "해양수산부", "중소벤처기업부",
+    ],
+    "처": ["기획예산처", "인사혁신처", "법제처", "식품의약품안전처", "국가데이터처", "지식재산처"],
+    # 정부기구도(영문) 이미지에 표시된 소속청 명칭을 한국어로 정리한 목록입니다.
+    # 검찰청·통계청·특허청의 개편 영향과 기관 분류를 원본 기구도에서 재대조하도록 상태 경고를 함께 둡니다.
+    "청": [
+        "국세청", "관세청", "조달청", "재외동포청", "검찰청", "병무청", "방위사업청",
+        "경찰청", "소방청", "국가유산청", "농촌진흥청", "산림청", "질병관리청",
+        "기상청", "행정중심복합도시건설청", "새만금개발청", "해양경찰청",
+        "우주항공청", "통계청",
+    ],
+    "위원회": ["방송미디어통신위원회", "공정거래위원회", "국민권익위원회", "금융위원회", "개인정보보호위원회", "원자력안전위원회"],
+}
+
+
+def organization_code_mismatch(expected_count: int, names: list[str]) -> bool:
+    """정의된 기관 목록이 공식 기준 개수와 다르면 코드 최신화가 필요합니다."""
+    return len(names) != expected_count or len(set(names)) != len(names)
+
+
+def render_government_category_list(category: str):
+    names = GOVERNMENT_ORG_LISTS.get(category, [])
+    expected = GOVERNMENT_ORG_COUNTS.get(category, len(names))
+    if organization_code_mismatch(expected, names):
+        st.warning(f"코드 최신화 필요: {category} 목록 {len(names)}개 / 기준 {expected}개. 정부기구도 원본을 다시 확인해 주세요.")
+    elif category == "청":
+        st.warning(f"코드 최신화 필요: {GOVERNMENT_ORG_VERIFICATION.get(category)}. 아래 기관명은 참고용 목록이며, 정식 현행 명칭은 공식 기관별 기구도와 추가 대조가 필요합니다.")
+    else:
+        st.caption(f"{GOVERNMENT_ORG_BASE_DATE} 기준 목록 · {len(names)}개 · {GOVERNMENT_ORG_VERIFICATION.get(category, '')}")
+    cols = st.columns(3)
+    for i, name in enumerate(names):
+        with cols[i % 3]:
+            st.markdown(f"<div class='pastel-card'>{html.escape(name)}</div>", unsafe_allow_html=True)
+    st.link_button("정부조직관리정보시스템에서 최신 기관별 기구도 확인", "https://www.org.go.kr/cop/bbs/getInstiChartList.do?pageIndex=1")
+
+
 def _org_open_detail(detail_key: str, return_page: str):
     st.session_state.org_detail = detail_key
     st.session_state.org_return_page = return_page
@@ -2718,12 +2920,14 @@ def render_node(title, role, key, detail_key=None, return_page=None, icon=""):
 
     이전 합의에서는 기관 상세 페이지 이동을 후속 확장으로 남겨 두었습니다.
     따라서 카드 클릭으로 다른 페이지에 진입시키지 않고, 기본 브라우저 툴팁으로
-    기관장·핵심 업무·조직 규모만 간략히 제공합니다. 상하·소속 관계는 도표에 둡니다.
+    현직 기관장 이름은 승인된 인사 API가 확보되기 전까지 미연동 상태로 안내하고, 핵심 업무·조직 규모를 제공합니다. 상하·소속 관계는 도표에 둡니다.
     """
     detail_key = detail_key or key
     detail = ORG_DETAILS.get(detail_key, {})
+    leader_name = detail.get("leader_name", "현직 기관장: 현재 승인된 API에서 인사정보를 제공하지 않아 미연동")
     tooltip = "\n".join([
-        f"기관장 직위: {detail.get('head', '기관별 상이')}",
+        leader_name,
+        f"직위: {detail.get('head', '기관별 상이')}",
         f"주요 업무: {detail.get('duty', role)}",
         f"조직 규모: {detail.get('scale', '공식 자료 확인')}",
         f"참고: {detail.get('note', '세부 사항은 공식 자료 확인')}",
@@ -2741,7 +2945,7 @@ def render_node(title, role, key, detail_key=None, return_page=None, icon=""):
 
 def render_government():
     render_hero("정부 조직", "행정부의 상하·소속 관계와 중앙행정기관의 유형을 살펴봅니다.")
-    st.caption("조직 기준일: 2026.10.02 · 정부조직관리정보시스템의 공식 정부기구도 기준. 이후 조직 개편은 공식 자료를 다시 확인해야 합니다.")
+    st.caption("조직 기준일: 2026.10.02 · 정부조직관리정보시스템의 공식 정부기구도 및 시행 정부조직법 기준. 최신 조직개편은 공식 원본과 대조해야 합니다.")
     with st.container(border=True):
         center = st.columns([1, 2, 1])[1]
         with center:
@@ -2757,16 +2961,23 @@ def render_government():
         cols = st.columns(3, gap="small")
         categories = [
             ("부", "19개", "ministry", "각부 장관이 소관 국가행정사무를 통할"),
-            ("처", "6개", "office", "여러 부에 걸친 전문·통합 행정 기능"),
+            ("처", "6개", "office", "전문·통합 행정 기능"),
             ("청", "19개", "agency", "집행 중심의 전문 행정사무"),
-            ("위원회", "6개", "commission", "법률에 따른 합의제 행정 기능"),
-            ("원", "유형", "institute", "감사·연구·통계 등 기관별 고유 기능"),
-            ("실", "유형", "office_unit", "정책 조정·기획·지원 등 보조 기능"),
+            ("위원회", "6개", "commission", "합의제 행정 기능"),
+            ("원", "유형", "institute", "감사·연구·통계 등 기관별 기능"),
+            ("실", "유형", "office_unit", "정책 조정·기획·지원 조직"),
         ]
         for index, (title, count, key, desc) in enumerate(categories):
             with cols[index % 3]:
-                render_node(title, f"{count} · {desc}", key, key, "정부 조직")
-        st.caption("공식 정부기구도 기준일의 부·처·청·위원회 수를 표시했습니다. 원·실은 조직 유형이며 중앙행정기관의 종류와 동일한 법적 범주로 단순 합산하지 않습니다.")
+                render_node(title, f"{count} · {desc}", key, key, "정부 조직", {"ministry":"🏢","office":"📁","agency":"🏛️","commission":"⚖️","institute":"📚","office_unit":"🧭"}[key])
+                if title in GOVERNMENT_ORG_LISTS:
+                    with st.expander(f"{title} 전체 목록 보기 ({count})", expanded=False):
+                        render_government_category_list(title)
+                else:
+                    with st.expander(f"{title} 유형 설명", expanded=False):
+                        st.write(desc)
+                        st.caption("이 항목은 정부기구도에 표시되는 조직 유형입니다. 개별 기관 목록은 공식 기구도에서 확인하세요.")
+        st.caption("조직도 기준일: 2026-10-02. 현재 승인된 12개 API에는 기관별 현직 기관장 이름을 제공하는 인사정보 API가 포함되지 않아 이름은 임의로 표시하지 않습니다. 정부디렉터리시스템 API 승인 또는 별도 공식 인사정보 API 확보 후 연동할 수 있습니다.")
 
     a, b = st.columns(2)
     with a:
@@ -3925,86 +4136,65 @@ def _reset_local_navigation():
     _reset_local_region_data()
 
 
-def render_study_hub():
-    """확정 시안의 2×2 공부하기 선택 화면."""
-    render_hero("공부하기", "대한민국의 국가기관과 지방자치단체 알아보기")
-    study_cards = [
-        ("정부 조직", "🏛️", "행정부의 구성과 중앙행정기관의 역할", "정부 조직"),
-        ("국회 조직", "▥", "입법부의 구성과 위원회·국회 지원기관", "국회 조직"),
-        ("법원 조직", "⚖️", "사법부의 구성과 법원 체계", "법원 조직"),
-        ("지방 정부", "🗺️", "지방 행정부와 지방의회·지역 통계", "지방 정부"),
-    ]
-    cols = st.columns(2, gap="small")
-    for index, (title, icon, description, page_name) in enumerate(study_cards):
-        with cols[index % 2]:
-            with st.container(border=True):
-                st.markdown(
-                    f"<div style='text-align:center;font-size:2rem;line-height:1.4'>{icon}</div>"
-                    f"<div style='text-align:center;font-weight:800;font-size:1.08rem;margin:.25rem 0'>{html.escape(title)}</div>"
-                    f"<div style='text-align:center;color:var(--secondary-text-color);font-size:.88rem;min-height:2.7rem'>{html.escape(description)}</div>",
-                    unsafe_allow_html=True,
-                )
-                if st.button(f"{title} 살펴보기", key=f"study_hub_{index}", use_container_width=True, type="secondary"):
-                    st.session_state.page = page_name
-                    st.session_state.org_detail = ""
-                    if page_name == "지방 정부":
-                        _reset_local_navigation()
-                    st.rerun()
-
-
 def render_sidebar():
     st.markdown("### 메뉴")
     nav_items = [
-        ("홈", "⌂  홈", "home"),
-        ("정치 퀴즈·미니게임", "▤  정치 퀴즈", "quiz"),
-        ("정치 퀴즈·미니게임", "♧  미니게임", "games"),
-        ("뉴스 속보", "▧  뉴스·속보", "news"),
-        ("정치 자료 탐색", "⌕  정치 자료 탐색", "data"),
+        ("홈", "🏠  홈", "home", "blue"),
+        ("정치 퀴즈", "🧠  정치 퀴즈", "quiz", "yellow"),
+        ("뉴스 속보", "📰  뉴스·속보", "news", "pink"),
+        ("정치 자료 탐색", "🔎  정치 자료 탐색", "data", "sky"),
     ]
-    for page, label, mode in nav_items:
-        if st.button(label, key=f"nav_{mode}", use_container_width=True):
+    for page, label, mode, color in nav_items:
+        if soft_button(label, f"nav_{mode}", color=color, use_container_width=True):
             st.session_state.page = page
             if mode == "quiz":
                 st.session_state.quiz_mode = "today"
                 st.session_state.quiz_active = False
-                st.session_state.quiz_return_page = "홈"
-            elif mode == "games":
-                st.session_state.quiz_mode = "games"
-                st.session_state.quiz_active = False
-                st.session_state.quiz_return_page = "홈"
+                st.session_state.quiz_return_page = "정치 퀴즈"
             elif mode == "data":
                 st.session_state.api_selected_item = ""
             st.rerun()
 
-    st.divider()
-    if st.button("⌂  공부하기", key="nav_study_hub", use_container_width=True):
-        st.session_state.page = "공부하기"
-        st.session_state.org_detail = ""
-        st.rerun()
+    st.markdown("<div class='sidebar-section-label'>📚 공부하기</div>", unsafe_allow_html=True)
     study_items = [
-        ("정부 조직", "♧  정부 조직"),
-        ("국회 조직", "🏛️  국회 조직"),
-        ("법원 조직", "⚖️  법원 조직"),
-        ("지방 정부", "🗺️  지방정부"),
+        ("정부 조직", "🏢  정부 조직", "orange"),
+        ("국회 조직", "🏛️  국회 조직", "blue"),
+        ("법원 조직", "⚖️  법원 조직", "purple"),
+        ("지방 정부", "🗺️  지방정부", "mint"),
     ]
-    for page_name, label in study_items:
-        if st.button(label, key=f"nav_study_{page_name}", use_container_width=True):
+    for page_name, label, color in study_items:
+        if soft_button(label, f"nav_study_{page_name}", color=color, use_container_width=True):
             st.session_state.page = page_name
             if page_name == "지방 정부":
                 _reset_local_navigation()
             st.session_state.org_detail = ""
             st.rerun()
-    if st.button("▣  정보 확인 가이드", key="nav_information_guide", use_container_width=True):
+    if soft_button("📘  정보 확인 가이드", "nav_information_guide", color="sky", use_container_width=True):
         st.session_state.page = "정보 확인 가이드"
         st.rerun()
 
     st.divider()
-    st.button("☷  시뮬레이션 · 준비 중", disabled=True, use_container_width=True)
+    if soft_button("🧪  시뮬레이션", "nav_simulation", color="purple", use_container_width=True):
+        st.session_state.page = "시뮬레이션"
+        st.rerun()
     if not QUIZ_PATH.exists():
         st.caption("Quiz.txt가 없으면 내장 예시 문제로 실행됩니다.")
     if not NEWS_PATH.exists():
         st.caption("NEWS.txt가 없으면 기본 RSS 목록으로 실행됩니다.")
 
+
+
+def render_simulation():
+    render_hero("시뮬레이션", "외부 Streamlit 웹앱을 이 화면 안에서 실행합니다.")
+    if not str(SIMULATION_APP_URL or "").strip():
+        st.info("연결할 외부 Streamlit 앱 주소가 아직 등록되지 않았습니다.")
+        st.write("친구가 만든 앱의 HTTPS 주소를 확인한 뒤 main.py 상단의 `SIMULATION_APP_URL`에 입력하면 이 화면에 삽입할 수 있습니다.")
+        st.caption("상대 앱이 iframe 삽입을 허용하지 않으면 브라우저 보안 정책으로 표시되지 않을 수 있습니다. 그 경우 별도 탭으로 여는 링크 방식이 필요합니다.")
+        return
+    if not is_safe_http_url(SIMULATION_APP_URL) or not str(SIMULATION_APP_URL).lower().startswith("https://"):
+        st.error("SIMULATION_APP_URL에는 유효한 HTTPS 주소만 입력할 수 있습니다.")
+        return
+    st.components.v1.iframe(SIMULATION_APP_URL, height=850, scrolling=True)
 
 def render_information_guide():
     render_hero("정보 확인 가이드", "정치 자료와 뉴스의 출처·기준 시점을 확인하는 방법입니다.")
@@ -4038,7 +4228,7 @@ def main():
             page = st.session_state.page
             if page == "홈":
                 render_home(quiz_questions)
-            elif page == "정치 퀴즈·미니게임":
+            elif page == "정치 퀴즈":
                 render_quiz_hub(quiz_questions)
             elif page == "뉴스 속보":
                 render_news()
@@ -4046,8 +4236,8 @@ def main():
                 render_data_explorer()
             elif page == "정보 확인 가이드":
                 render_information_guide()
-            elif page == "공부하기":
-                render_study_hub()
+            elif page == "시뮬레이션":
+                render_simulation()
             elif page == "정부 조직":
                 render_government()
             elif page == "국회 조직":
